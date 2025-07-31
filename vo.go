@@ -104,7 +104,7 @@ type DocValidator func(doc *Document) error
 type Enrich func(r *http.Request, doc *Document) error
 
 // Policy defines a function that determines if an action should be taken for a request.
-type Policy func(r *http.Request) bool
+type Policy func(r *http.Request, doc *Document) bool
 
 // ValidationErrors is a custom error type that holds a slice of validation errors.
 type ValidationErrors []error
@@ -463,8 +463,8 @@ func WithDocValidators(validators ...DocValidator) MiddlewareOption {
 	}
 }
 
-// VOMiddleware returns a standard http.Handler middleware that validates a request.
-func VOMiddleware(voName string, opts ...MiddlewareOption) func(http.Handler) http.Handler {
+// Middleware returns a standard http.Handler middleware that validates a request.
+func Middleware(voName string, opts ...MiddlewareOption) func(http.Handler) http.Handler {
 	cfg := &middlewareConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -508,7 +508,7 @@ func VOMiddleware(voName string, opts ...MiddlewareOption) func(http.Handler) ht
 			enricherErrs := &ValidationErrors{}
 			for _, ce := range cfg.enrichers {
 				// Run if there is no policy (Always) or if the policy passes.
-				if ce.policy == nil || ce.policy(r) {
+				if ce.policy == nil || ce.policy(r, doc) {
 					if err := ce.enric(r, doc); err != nil {
 						enricherErrs.Add(err)
 					}
