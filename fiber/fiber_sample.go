@@ -1,4 +1,4 @@
-//go:build ignore
+////go:build ignore
 
 package main
 
@@ -14,14 +14,13 @@ import (
 // reside in a dedicated package, such as `vo` or `dto`.
 // For example: `vo.Login`. This promotes separation of concerns and reusability.
 var loginVO = dvo.WithFields(
-	// Corrected: Validators are passed as arguments to Field.
-	dvo.Field[string]("username", validator.Email()),
-	dvo.Field[string]("password", validator.MinLength(8)),
+	// dvo.Field returns a FieldFunc, which must be called to produce the field.
+	dvo.Field[string]("username", validator.Email())(),
+	dvo.Field[string]("password", validator.MinLength(8))(),
 )
 
 // loginHandler is the main business logic handler.
 // It runs only after the Bind middleware has successfully validated the request.
-// Corrected: The function now correctly accepts a pointer to fiber.Ctx.
 func loginHandler(c fiber.Ctx) error {
 	// Use the framework-specific helper from the adaptor package to get the ViewObject.
 	vo := middleware.ViewObject(c)

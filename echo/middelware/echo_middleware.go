@@ -20,13 +20,13 @@ type Enrich func(echo.Context) map[string]any
 var _enrich Enrich
 
 // once is a `sync.Once` variable used to ensure that the `_enrich` function is set only once.
-// This prevents multiple calls to `OnSuccessfulValidation` from overwriting the enrichment function.
+// This prevents multiple calls to `EnrichViewWith` from overwriting the enrichment function.
 var once sync.Once
 
-// OnSuccessfulValidation sets the enrichment function to be called upon successful validation of the request body.
+// EnrichViewWith sets the enrichment function to be called upon successful validation of the request body.
 // This function should be called only once during application startup.
 // Subsequent calls will be ignored.
-func OnSuccessfulValidation(enrich Enrich) {
+func EnrichViewWith(enrich Enrich) {
 	once.Do(func() {
 		_enrich = enrich
 	})
@@ -55,7 +55,7 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 			data := result.MustGet()
 			if _enrich != nil {
 				for k, v := range _enrich(c) {
-					data[k] = v
+					data.Set(k, v)
 				}
 			}
 			// On success, store the validated clone in the standard request context.
@@ -71,9 +71,9 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 
 // ViewObject retrieves the validated ViewObject from the echo context.
 // It returns nil if the object is not found.
-func ViewObject(c echo.Context) dvo.Data {
+func ViewObject(c echo.Context) dvo.DataObject {
 	if val := c.Request().Context().Value(dvo.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.Data); ok {
+		if vo, ok := val.(dvo.DataObject); ok {
 			return vo
 		}
 	}

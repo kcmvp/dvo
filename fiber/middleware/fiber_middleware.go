@@ -17,11 +17,11 @@ type Enrich func(c fiber.Ctx) map[string]any
 var _enrich Enrich
 var once sync.Once
 
-// OnSuccessfulValidation sets a function to enrich the validated data.
+// EnrichViewWith sets a function to enrich the validated data.
 // This function is executed only once, typically during application startup.
 // The provided `enrich` function will be called after successful validation
 // to add additional information to the data object.
-func OnSuccessfulValidation(enrich Enrich) {
+func EnrichViewWith(enrich Enrich) {
 	once.Do(func() {
 		_enrich = enrich
 	})
@@ -46,7 +46,7 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 		data := result.MustGet()
 		if _enrich != nil {
 			for k, v := range _enrich(c) {
-				data[k] = v
+				data.Set(k, v)
 			}
 		}
 		// Store the validated object in the context for the main handler to use.
@@ -57,9 +57,9 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 
 // ViewObject retrieves the validated ViewObject from the fiber context.
 // It returns nil if the object is not found.
-func ViewObject(c fiber.Ctx) dvo.Data {
+func ViewObject(c fiber.Ctx) dvo.DataObject {
 	if val := c.Locals(dvo.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.Data); ok {
+		if vo, ok := val.(dvo.DataObject); ok {
 			return vo
 		}
 	}

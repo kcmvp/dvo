@@ -17,9 +17,9 @@ type Enrich func(*gin.Context) map[string]any
 var _enrich Enrich
 var once sync.Once
 
-// OnSuccessfulValidation sets a function to be called for enriching the validated data
+// EnrichViewWith sets a function to be called for enriching the validated data
 // when validation is successful. This function is set only once.
-func OnSuccessfulValidation(enrich Enrich) {
+func EnrichViewWith(enrich Enrich) {
 	once.Do(func() {
 		_enrich = enrich
 	})
@@ -50,7 +50,7 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 		data := result.MustGet()
 		if _enrich != nil {
 			for k, v := range _enrich(c) {
-				data[k] = v
+				data.Set(k, v)
 			}
 		}
 		// Store the validated object in the request's context for the main handler to use.
@@ -63,9 +63,9 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 
 // ViewObject retrieves the validated ViewObject from the gin context.
 // It returns nil if the object is not found.
-func ViewObject(c *gin.Context) dvo.Data {
+func ViewObject(c *gin.Context) dvo.DataObject {
 	if val := c.Request.Context().Value(dvo.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.Data); ok {
+		if vo, ok := val.(dvo.DataObject); ok {
 			return vo
 		}
 	}

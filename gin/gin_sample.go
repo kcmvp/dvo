@@ -1,4 +1,4 @@
-//go:build ignore
+////go:build ignore
 
 package main
 
@@ -15,9 +15,9 @@ import (
 // reside in a dedicated package, such as `vo` or `dto`.
 // For example: `vo.Login`. This promotes separation of concerns and reusability.
 var loginVO = dvo.WithFields(
-	// Corrected: Validators are passed as arguments to Field.
-	dvo.Field[string]("username", validator.Email()),
-	dvo.Field[string]("password", validator.MinLength(8)),
+	// dvo.Field returns a FieldFunc, which must be called to produce the field.
+	dvo.Field[string]("username", validator.Email())(),
+	dvo.Field[string]("password", validator.MinLength(8))(),
 )
 
 // loginHandler is the main business logic handler.
