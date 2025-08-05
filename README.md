@@ -1,7 +1,12 @@
-# Declared View Object (dvo)
-
+<p align="center">
+  <br/>
+  <br/>
+    Declarative View Object (dvo)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kcmvp/dvo)](https://goreportcard.com/report/github.com/kcmvp/dvo)
 [![Go.Dev](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white)](https://pkg.go.dev/github.com/kcmvp/dvo)
+[![Coverage](https://img.shields.io/codecov/c/github/kcmvp/dvo)](https://app.codecov.io/gh/kcmvp/dvo)
+
+</p>
 
 `dvo` is a Go library designed to simplify and streamline request body validation and data binding in modern web frameworks. It provides a declarative, fluent API for defining validation rules, keeping your handler logic clean and focused on business concerns.
 
