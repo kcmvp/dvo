@@ -2,7 +2,6 @@
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
 name: Go
-
 on:
   push:
     branches: [ "main" ]
@@ -10,7 +9,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
     env:
      GOPATH: /home/runner/work/gopath
