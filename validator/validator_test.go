@@ -18,7 +18,7 @@ func TestMinLength(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := MinLength(tt.min)(tt.str); (err != nil) != tt.wantErr {
+			if err := MinLength(tt.min).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("MinLength() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -38,7 +38,7 @@ func TestMaxLength(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := MaxLength(tt.max)(tt.str); (err != nil) != tt.wantErr {
+			if err := MaxLength(tt.max).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("MaxLength() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -58,7 +58,7 @@ func TestExactLength(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ExactLength(tt.len)(tt.str); (err != nil) != tt.wantErr {
+			if err := ExactLength(tt.len).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("ExactLength() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -81,7 +81,7 @@ func TestLengthBetween(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := LengthBetween(tt.min, tt.max)(tt.str); (err != nil) != tt.wantErr {
+			if err := LengthBetween(tt.min, tt.max).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("LengthBetween() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -101,7 +101,7 @@ func TestOnlyContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := OnlyContains(tt.charSets...)(tt.str); (err != nil) != tt.wantErr {
+			if err := OnlyContains(tt.charSets...).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("OnlyContains() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -122,7 +122,7 @@ func TestContainsAny(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ContainsAny(tt.charSets...)(tt.str); (err != nil) != tt.wantErr {
+			if err := ContainsAny(tt.charSets...).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("ContainsAny() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -143,7 +143,7 @@ func TestContainsAll(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ContainsAll(tt.charSets...)(tt.str); (err != nil) != tt.wantErr {
+			if err := ContainsAll(tt.charSets...).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("ContainsAll() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -163,7 +163,7 @@ func TestNotContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := NotContains(tt.charSets...)(tt.str); (err != nil) != tt.wantErr {
+			if err := NotContains(tt.charSets...).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("NotContains() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -185,7 +185,7 @@ func TestMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := Match(tt.pattern)(tt.str); (err != nil) != tt.wantErr {
+			if err := Match(tt.pattern).Validate(tt.str); (err != nil) != tt.wantErr {
 				t.Errorf("Match() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -205,7 +205,7 @@ func TestEmail(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := Email()(tt.email); (err != nil) != tt.wantErr {
+			if err := Email().Validate(tt.email); (err != nil) != tt.wantErr {
 				t.Errorf("Email() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -226,7 +226,7 @@ func TestURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := URL()(tt.url); (err != nil) != tt.wantErr {
+			if err := URL().Validate(tt.url); (err != nil) != tt.wantErr {
 				t.Errorf("URL() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -246,7 +246,7 @@ func TestOneOf(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if err := OneOf(tt.allowed)(tt.val); (err != nil) != tt.wantErr {
+				if err := OneOf(tt.allowed).Validate(tt.val); (err != nil) != tt.wantErr {
 					t.Errorf("OneOf() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			})
@@ -265,7 +265,7 @@ func TestOneOf(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if err := OneOf(tt.allowed)(tt.val); (err != nil) != tt.wantErr {
+				if err := OneOf(tt.allowed).Validate(tt.val); (err != nil) != tt.wantErr {
 					t.Errorf("OneOf() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			})
@@ -284,7 +284,7 @@ func TestOneOf(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if err := OneOf(tt.allowed)(tt.val); (err != nil) != tt.wantErr {
+				if err := OneOf(tt.allowed).Validate(tt.val); (err != nil) != tt.wantErr {
 					t.Errorf("OneOf() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			})
@@ -294,38 +294,38 @@ func TestOneOf(t *testing.T) {
 
 func TestGt(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
-		if err := Gt(5)(6); err != nil {
+		if err := Gt(5).Validate(6); err != nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, false)
 		}
-		if err := Gt(5)(5); err == nil {
+		if err := Gt(5).Validate(5); err == nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, true)
 		}
-		if err := Gt(5)(4); err == nil {
+		if err := Gt(5).Validate(4); err == nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("float64", func(t *testing.T) {
-		if err := Gt(5.5)(5.6); err != nil {
+		if err := Gt(5.5).Validate(5.6); err != nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, false)
 		}
-		if err := Gt(5.5)(5.5); err == nil {
+		if err := Gt(5.5).Validate(5.5); err == nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, true)
 		}
-		if err := Gt(5.5)(5.4); err == nil {
+		if err := Gt(5.5).Validate(5.4); err == nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("time.Time", func(t *testing.T) {
 		now := time.Now()
-		if err := Gt(now)(now.Add(time.Minute)); err != nil {
+		if err := Gt(now).Validate(now.Add(time.Minute)); err != nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, false)
 		}
-		if err := Gt(now)(now); err == nil {
+		if err := Gt(now).Validate(now); err == nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, true)
 		}
-		if err := Gt(now)(now.Add(-time.Minute)); err == nil {
+		if err := Gt(now).Validate(now.Add(-time.Minute)); err == nil {
 			t.Errorf("Gt() error = %v, wantErr %v", err, true)
 		}
 	})
@@ -333,38 +333,38 @@ func TestGt(t *testing.T) {
 
 func TestGte(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
-		if err := Gte(5)(6); err != nil {
+		if err := Gte(5).Validate(6); err != nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, false)
 		}
-		if err := Gte(5)(5); err != nil {
+		if err := Gte(5).Validate(5); err != nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, false)
 		}
-		if err := Gte(5)(4); err == nil {
+		if err := Gte(5).Validate(4); err == nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("float64", func(t *testing.T) {
-		if err := Gte(5.5)(5.6); err != nil {
+		if err := Gte(5.5).Validate(5.6); err != nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, false)
 		}
-		if err := Gte(5.5)(5.5); err != nil {
+		if err := Gte(5.5).Validate(5.5); err != nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, false)
 		}
-		if err := Gte(5.5)(5.4); err == nil {
+		if err := Gte(5.5).Validate(5.4); err == nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("time.Time", func(t *testing.T) {
 		now := time.Now()
-		if err := Gte(now)(now.Add(time.Minute)); err != nil {
+		if err := Gte(now).Validate(now.Add(time.Minute)); err != nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, false)
 		}
-		if err := Gte(now)(now); err != nil {
+		if err := Gte(now).Validate(now); err != nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, false)
 		}
-		if err := Gte(now)(now.Add(-time.Minute)); err == nil {
+		if err := Gte(now).Validate(now.Add(-time.Minute)); err == nil {
 			t.Errorf("Gte() error = %v, wantErr %v", err, true)
 		}
 	})
@@ -372,38 +372,38 @@ func TestGte(t *testing.T) {
 
 func TestLt(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
-		if err := Lt(5)(4); err != nil {
+		if err := Lt(5).Validate(4); err != nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, false)
 		}
-		if err := Lt(5)(5); err == nil {
+		if err := Lt(5).Validate(5); err == nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, true)
 		}
-		if err := Lt(5)(6); err == nil {
+		if err := Lt(5).Validate(6); err == nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("float64", func(t *testing.T) {
-		if err := Lt(5.5)(5.4); err != nil {
+		if err := Lt(5.5).Validate(5.4); err != nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, false)
 		}
-		if err := Lt(5.5)(5.5); err == nil {
+		if err := Lt(5.5).Validate(5.5); err == nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, true)
 		}
-		if err := Lt(5.5)(5.6); err == nil {
+		if err := Lt(5.5).Validate(5.6); err == nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("time.Time", func(t *testing.T) {
 		now := time.Now()
-		if err := Lt(now)(now.Add(-time.Minute)); err != nil {
+		if err := Lt(now).Validate(now.Add(-time.Minute)); err != nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, false)
 		}
-		if err := Lt(now)(now); err == nil {
+		if err := Lt(now).Validate(now); err == nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, true)
 		}
-		if err := Lt(now)(now.Add(time.Minute)); err == nil {
+		if err := Lt(now).Validate(now.Add(time.Minute)); err == nil {
 			t.Errorf("Lt() error = %v, wantErr %v", err, true)
 		}
 	})
@@ -411,38 +411,38 @@ func TestLt(t *testing.T) {
 
 func TestLte(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
-		if err := Lte(5)(4); err != nil {
+		if err := Lte(5).Validate(4); err != nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, false)
 		}
-		if err := Lte(5)(5); err != nil {
+		if err := Lte(5).Validate(5); err != nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, false)
 		}
-		if err := Lte(5)(6); err == nil {
+		if err := Lte(5).Validate(6); err == nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("float64", func(t *testing.T) {
-		if err := Lte(5.5)(5.4); err != nil {
+		if err := Lte(5.5).Validate(5.4); err != nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, false)
 		}
-		if err := Lte(5.5)(5.5); err != nil {
+		if err := Lte(5.5).Validate(5.5); err != nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, false)
 		}
-		if err := Lte(5.5)(5.6); err == nil {
+		if err := Lte(5.5).Validate(5.6); err == nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, true)
 		}
 	})
 
 	t.Run("time.Time", func(t *testing.T) {
 		now := time.Now()
-		if err := Lte(now)(now.Add(-time.Minute)); err != nil {
+		if err := Lte(now).Validate(now.Add(-time.Minute)); err != nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, false)
 		}
-		if err := Lte(now)(now); err != nil {
+		if err := Lte(now).Validate(now); err != nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, false)
 		}
-		if err := Lte(now)(now.Add(time.Minute)); err == nil {
+		if err := Lte(now).Validate(now.Add(time.Minute)); err == nil {
 			t.Errorf("Lte() error = %v, wantErr %v", err, true)
 		}
 	})
@@ -450,58 +450,58 @@ func TestLte(t *testing.T) {
 
 func TestBetween(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
-		if err := Between(5, 10)(4); err == nil {
+		if err := Between(5, 10).Validate(4); err == nil {
 			t.Errorf("Between() error = nil, wantErr true")
 		}
-		if err := Between(5, 10)(11); err == nil {
+		if err := Between(5, 10).Validate(11); err == nil {
 			t.Errorf("Between() error = nil, wantErr true")
 		}
-		if err := Between(5, 10)(7); err != nil {
+		if err := Between(5, 10).Validate(7); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
-		if err := Between(5, 10)(5); err != nil {
+		if err := Between(5, 10).Validate(5); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
-		if err := Between(5, 10)(10); err != nil {
+		if err := Between(5, 10).Validate(10); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
 	})
 
 	t.Run("float64", func(t *testing.T) {
-		if err := Between(5.5, 10.5)(5.4); err == nil {
+		if err := Between(5.5, 10.5).Validate(5.4); err == nil {
 			t.Errorf("Between() error = nil, wantErr true")
 		}
-		if err := Between(5.5, 10.5)(10.6); err == nil {
+		if err := Between(5.5, 10.5).Validate(10.6); err == nil {
 			t.Errorf("Between() error = nil, wantErr true")
 		}
-		if err := Between(5.5, 10.5)(7.5); err != nil {
+		if err := Between(5.5, 10.5).Validate(7.5); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
-		if err := Between(5.5, 10.5)(5.5); err != nil {
+		if err := Between(5.5, 10.5).Validate(5.5); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
-		if err := Between(5.5, 10.5)(10.5); err != nil {
+		if err := Between(5.5, 10.5).Validate(10.5); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
 	})
 
 	t.Run("time.Time", func(t *testing.T) {
 		now := time.Now()
-		min := now
-		max := now.Add(time.Hour)
-		if err := Between(min, max)(now.Add(-time.Minute)); err == nil {
+		minV := now
+		maxV := now.Add(time.Hour)
+		if err := Between(minV, maxV).Validate(now.Add(-time.Minute)); err == nil {
 			t.Errorf("Between() error = nil, wantErr true")
 		}
-		if err := Between(min, max)(max.Add(time.Minute)); err == nil {
+		if err := Between(minV, maxV).Validate(maxV.Add(time.Minute)); err == nil {
 			t.Errorf("Between() error = nil, wantErr true")
 		}
-		if err := Between(min, max)(now.Add(30 * time.Minute)); err != nil {
+		if err := Between(minV, maxV).Validate(now.Add(30 * time.Minute)); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
-		if err := Between(min, max)(min); err != nil {
+		if err := Between(minV, maxV).Validate(minV); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
-		if err := Between(min, max)(max); err != nil {
+		if err := Between(minV, maxV).Validate(maxV); err != nil {
 			t.Errorf("Between() error = %v, wantErr nil", err)
 		}
 	})
@@ -518,7 +518,7 @@ func TestBeTrue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := BeTrue()(tt.val); (err != nil) != tt.wantErr {
+			if err := BeTrue().Validate(tt.val); (err != nil) != tt.wantErr {
 				t.Errorf("BeTrue() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -536,7 +536,7 @@ func TestBeFalse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := BeFalse()(tt.val); (err != nil) != tt.wantErr {
+			if err := BeFalse().Validate(tt.val); (err != nil) != tt.wantErr {
 				t.Errorf("BeFalse() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
