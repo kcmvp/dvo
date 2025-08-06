@@ -202,9 +202,7 @@ func NotContains(charSets ...CharSet) types.ValidateFunc[string] {
 //
 // Example: Match("foo*") will match "foobar", "foo", etc.
 func Match(pattern string) types.ValidateFunc[string] {
-	if !match.IsPattern(pattern) {
-		panic(fmt.Sprintf("invalid pattern provided to Match validator: %s", pattern))
-	}
+	lo.Assertf(match.IsPattern(pattern), "invalid match pattern : %s(`?` stands for one character, `*` stands for any number of characters)", pattern)
 	return func() (string, types.Validator[string]) {
 		return "match", func(str string) error {
 			if !match.Match(str, pattern) {
@@ -362,6 +360,16 @@ func isGreaterThan[T types.Number | time.Time](a, b T) bool {
 		return v > any(b).(int32)
 	case int64:
 		return v > any(b).(int64)
+	case uint:
+		return v > any(b).(uint)
+	case uint8:
+		return v > any(b).(uint8)
+	case uint16:
+		return v > any(b).(uint16)
+	case uint32:
+		return v > any(b).(uint32)
+	case uint64:
+		return v > any(b).(uint64)
 	case float32:
 		return v > any(b).(float32)
 	case float64:
@@ -388,6 +396,16 @@ func isLessThan[T types.Number | time.Time](a, b T) bool {
 		return v < any(b).(int32)
 	case int64:
 		return v < any(b).(int64)
+	case uint:
+		return v < any(b).(uint)
+	case uint8:
+		return v < any(b).(uint8)
+	case uint16:
+		return v < any(b).(uint16)
+	case uint32:
+		return v < any(b).(uint32)
+	case uint64:
+		return v < any(b).(uint64)
 	case float32:
 		return v < any(b).(float32)
 	case float64:
