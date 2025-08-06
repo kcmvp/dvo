@@ -1,8 +1,9 @@
 package dvo
 
 import (
-	"errors"
 	"fmt"
+	"github.com/kcmvp/dvo/types"
+	"github.com/kcmvp/dvo/validator"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
@@ -17,47 +18,6 @@ type viewObjectKeyType struct{}
 
 // ViewObjectKey is the key used to store the validated dataObject map in the request context.
 var ViewObjectKey = viewObjectKeyType{}
-
-type Number interface {
-	int | int8 | int16 | int32 | int64 | float32 | float64
-}
-
-// JSONType is a constraint for the actual Go types we want to validate.
-type JSONType interface {
-	Number | string | time.Time | bool
-}
-
-// Validator is a pure, type-safe function that receives an already-typed value.
-// It has a name to prevent duplicate validators on a single field.
-type Validator[T JSONType] interface {
-	// Name returns a unique machine-readable name for the validator, e.g., "min".
-	Name() string
-	// Validate performs the validation and returns an error if it fails.
-	Validate(val T) error
-}
-
-// validator is an internal implementation of the Validator interface.
-type validator[T JSONType] struct {
-	name string
-	fn   func(val T) error
-}
-
-// Name implements the Validator interface.
-func (v validator[T]) Name() string {
-	return v.name
-}
-
-// Validate implements the Validator interface.
-func (v validator[T]) Validate(val T) error {
-	return v.fn(val)
-}
-
-// NewValidator is a helper for validator implementations to create a Validator.
-// It is not intended for direct use by the end-user, but must be exported
-// for use by the validator package.
-func NewValidator[T JSONType](name string, fn func(val T) error) Validator[T] {
-	return validator[T]{name: name, fn: fn}
-}
 
 // validationError is a custom error type that holds a map of validation errors,
 // ensuring that there is only one error per field.
@@ -104,10 +64,10 @@ type viewField interface {
 	validate(json string) (value any, found bool, err error)
 }
 
-type ViewField[T JSONType] struct {
+type ViewField[T types.JSONType] struct {
 	name       string
 	required   bool
-	validators []Validator[T]
+	validators []types.Validator[T]
 }
 
 var _ viewField = (*ViewField[string])(nil)
@@ -144,7 +104,7 @@ func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
 	res := gjson.Get(json, f.name)
 	if !res.Exists() {
 		if f.required {
-			return mo.Err[T](fmt.Errorf("%s %w", f.name, ErrRequired)), false
+			return mo.Err[T](fmt.Errorf("%s %w", f.name, validator.ErrRequired)), false
 		}
 		// For a missing optional field, return a zero value but signal it was not found.
 		return mo.Ok(*new(T)), false
@@ -158,17 +118,13 @@ func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
 
 	val := typedVal.MustGet()
 	for _, v := range f.validators {
-		if err := v.Validate(val); err != nil {
+		if err := v(val); err != nil {
 			err = fmt.Errorf("field '%s': %w", f.name, err)
 			return mo.Err[T](err), true
 		}
 	}
 	return mo.Ok(val), true
 }
-
-var ErrIntegerOverflow = errors.New("integer overflow")
-var ErrTypeMismatch = errors.New("type mismatch")
-var ErrRequired = errors.New("is required but not found")
 
 // checkBounds is a helper to check if a big.Float is within the given int64 min/max boundaries.
 func checkBounds(bf *big.Float, min, max int64) bool {
@@ -181,7 +137,7 @@ func checkBounds(bf *big.Float, min, max int64) bool {
 // It returns a mo.Result[T] which contains the typed value on success,
 // or an error if the type conversion fails or the JSON type does not match
 // the expected Go type.
-func typed[T JSONType](res gjson.Result) mo.Result[T] {
+func typed[T types.JSONType](res gjson.Result) mo.Result[T] {
 	var zero T
 	switch tt := any(zero).(type) {
 	case string:
@@ -194,7 +150,7 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 		}
 	case int, int8, int16, int32, int64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", ErrTypeMismatch, tt, res.Type))
+			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", validator.ErrTypeMismatch, tt, res.Type))
 		}
 
 		// Use big.Float for arbitrary-precision parsing to avoid float64 precision loss.
@@ -205,7 +161,7 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 
 		// Check if the number is a whole number.
 		if !bf.IsInt() {
-			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", ErrTypeMismatch, res.Raw))
+			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", validator.ErrTypeMismatch, res.Raw))
 		}
 
 		// Check for overflow against the specific integer type and convert.
@@ -213,34 +169,34 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 		switch any(zero).(type) {
 		case int:
 			if checkBounds(bf, math.MinInt, math.MaxInt) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int(val)).(T))
 		case int8:
 			if checkBounds(bf, math.MinInt8, math.MaxInt8) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int8(val)).(T))
 		case int16:
 			if checkBounds(bf, math.MinInt16, math.MaxInt16) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int16(val)).(T))
 		case int32:
 			if checkBounds(bf, math.MinInt32, math.MaxInt32) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int32(val)).(T))
 		case int64:
 			if checkBounds(bf, math.MinInt64, math.MaxInt64) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(val).(T))
 		}
 
 	case float32, float64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", ErrTypeMismatch, res.Type))
+			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", validator.ErrTypeMismatch, res.Type))
 		}
 		val := res.Float() // This is float64
 		switch any(zero).(type) {
@@ -271,27 +227,27 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 			return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", res.String()))
 		}
 	}
-	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", ErrTypeMismatch, zero, res.Type))
+	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", validator.ErrTypeMismatch, zero, res.Type))
 }
 
-type FieldFunc[T JSONType] func(...Validator[T]) *ViewField[T]
+type FieldFunc[T types.JSONType] func(...types.ValidateFunc[T]) *ViewField[T]
 
-func Field[T JSONType](name string, validators ...Validator[T]) FieldFunc[T] {
-	return func(additional ...Validator[T]) *ViewField[T] {
-		// Both slices are now of the same type ([]Validator[T]), so we can append directly.
-		allValidators := append(validators, additional...)
-
+func Field[T types.JSONType](name string, vfs ...types.ValidateFunc[T]) FieldFunc[T] {
+	return func(fs ...types.ValidateFunc[T]) *ViewField[T] {
+		afs := append(vfs, fs...)
 		names := make(map[string]struct{})
-		for _, v := range allValidators {
-			if _, exists := names[v.Name()]; exists {
-				panic(fmt.Sprintf("dvo: duplicate validator '%s' for field '%s'", v.Name(), name))
+		var nf []types.Validator[T]
+		for _, v := range afs {
+			n, f := v()
+			if _, exists := names[n]; exists {
+				panic(fmt.Sprintf("dvo: duplicate validator '%s' for field '%s'", n, name))
 			}
-			names[v.Name()] = struct{}{}
+			names[n] = struct{}{}
+			nf = append(nf, f)
 		}
-		// Now we use the combined slice to create the final field.
 		return &ViewField[T]{
 			name:       name,
-			validators: allValidators,
+			validators: nf,
 			required:   true,
 		}
 	}

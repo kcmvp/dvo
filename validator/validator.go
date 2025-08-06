@@ -1,8 +1,9 @@
 package validator
 
 import (
+	"errors"
 	"fmt"
-	"github.com/kcmvp/dvo"
+	"github.com/kcmvp/dvo/types"
 	"github.com/tidwall/match"
 	"net/mail"
 	"net/url"
@@ -28,6 +29,33 @@ var (
 	SpecialCharSet   = string(lo.SpecialCharset)
 )
 
+var (
+	ErrIntegerOverflow = errors.New("integer overflow")
+	ErrTypeMismatch    = errors.New("type mismatch")
+	ErrRequired        = errors.New("is required but not found")
+
+	ErrLengthMin     = errors.New("length must be at least")
+	ErrLengthMax     = errors.New("length must be at most")
+	ErrLengthExact   = errors.New("length must be exactly")
+	ErrLengthBetween = errors.New("length must be between")
+
+	ErrOnlyContainsCharSet = errors.New("can only contain characters from")
+	ErrContainsAnyCharSet  = errors.New("must contain at least one character from")
+	ErrContainsAll         = errors.New("not contains chars from")
+	ErrNotContainsSet      = errors.New("must not contain any characters from")
+	ErrNotMatch            = errors.New("not match pattern")
+	ErrNotValidEmail       = errors.New("not valid email address")
+	ErrNotValidURL         = errors.New("not valid url")
+	ErrNotOneOf            = errors.New("value must be one of")
+	ErrMustGt              = errors.New("must be greater than")
+	ErrMustGte             = errors.New("must be greater than or equal to")
+	ErrMustLt              = errors.New("must be less than")
+	ErrMustLte             = errors.New("must be less than or equal to")
+	ErrMustBetween         = errors.New("must be between")
+	ErrMustBeTrue          = errors.New("must be true")
+	ErrMustBeFalse         = errors.New("must be true")
+)
+
 // value is a private helper to get the character set and its descriptive name.
 func (set CharSet) value() (chars string, name string) {
 	switch set {
@@ -47,106 +75,124 @@ func (set CharSet) value() (chars string, name string) {
 // --- String Validators ---
 
 // MinLength validates that a string's length is at least the specified minimum.
-func MinLength(min int) dvo.Validator[string] {
-	return dvo.NewValidator("min_length", func(str string) error {
-		if len(str) < min {
-			return fmt.Errorf("length must be at least %d characters", min)
+func MinLength(min int) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "min_length", func(str string) error {
+			if len(str) < min {
+				return fmt.Errorf("%w %d ", ErrLengthMin, min)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // MaxLength validates that a string's length is at most the specified maximum.
-func MaxLength(max int) dvo.Validator[string] {
-	return dvo.NewValidator("max_length", func(str string) error {
-		if len(str) > max {
-			return fmt.Errorf("length must be at most %d characters", max)
+func MaxLength(max int) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "max_length", func(str string) error {
+			if len(str) > max {
+				return fmt.Errorf("%w %d ", ErrLengthMax, max)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // ExactLength validates that a string's length is exactly the specified length.
-func ExactLength(length int) dvo.Validator[string] {
-	return dvo.NewValidator("exact_length", func(str string) error {
-		if len(str) != length {
-			return fmt.Errorf("length must be exactly %d characters", length)
+func ExactLength(length int) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "exact_length", func(str string) error {
+			if len(str) != length {
+				return fmt.Errorf("%w %d characters", ErrLengthExact, length)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
+
 }
 
 // LengthBetween validates that a string's length is within a given range (inclusive).
-func LengthBetween(min, max int) dvo.Validator[string] {
-	return dvo.NewValidator("length_between", func(str string) error {
-		length := len(str)
-		if length < min || length > max {
-			return fmt.Errorf("length must be between %d and %d characters", min, max)
+func LengthBetween(min, max int) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "length_between", func(str string) error {
+			length := len(str)
+			if length < min || length > max {
+				return fmt.Errorf("%w %d and %d characters", ErrLengthBetween, min, max)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // OnlyContains validates that a string only contains characters from the specified character sets.
-func OnlyContains(charSets ...CharSet) dvo.Validator[string] {
-	return dvo.NewValidator("only_contains", func(str string) error {
-		var allChars strings.Builder
-		var names []string
-		for _, set := range charSets {
-			chars, name := set.value()
-			allChars.WriteString(chars)
-			names = append(names, name)
-		}
-		for _, r := range str {
-			if !strings.ContainsRune(allChars.String(), r) {
-				return fmt.Errorf("can only contain characters from: %s", strings.Join(names, ", "))
+func OnlyContains(charSets ...CharSet) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "only_contains", func(str string) error {
+			var allChars strings.Builder
+			var names []string
+			for _, set := range charSets {
+				chars, name := set.value()
+				allChars.WriteString(chars)
+				names = append(names, name)
 			}
+			for _, r := range str {
+				if !strings.ContainsRune(allChars.String(), r) {
+					return fmt.Errorf("%w: %s", ErrOnlyContainsCharSet, strings.Join(names, ", "))
+				}
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // ContainsAny validates that a string contains at least one character from any of the specified character sets.
-func ContainsAny(charSets ...CharSet) dvo.Validator[string] {
-	return dvo.NewValidator("contains_any", func(str string) error {
-		var allChars strings.Builder
-		var names []string
-		for _, set := range charSets {
-			chars, name := set.value()
-			allChars.WriteString(chars)
-			names = append(names, name)
+func ContainsAny(charSets ...CharSet) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "contains_any", func(str string) error {
+			var allChars strings.Builder
+			var names []string
+			for _, set := range charSets {
+				chars, name := set.value()
+				allChars.WriteString(chars)
+				names = append(names, name)
+			}
+			if !strings.ContainsAny(allChars.String(), str) {
+				return fmt.Errorf("%w: %s", ErrContainsAnyCharSet, strings.Join(names, ", "))
+			}
+			return nil
 		}
-		if !strings.ContainsAny(str, allChars.String()) {
-			return fmt.Errorf("must contain at least one character from: %s", strings.Join(names, ", "))
-		}
-		return nil
-	})
+	}
 }
 
-// ContainsAll validates that a string contains at least one character from *each* of the specified character sets.
-func ContainsAll(charSets ...CharSet) dvo.Validator[string] {
-	return dvo.NewValidator("contains_all", func(str string) error {
-		for _, set := range charSets {
-			chars, name := set.value()
-			if !strings.ContainsAny(str, chars) {
-				return fmt.Errorf("must contain at least one character from: %s", name)
+// ContainsAll validates that a string contains at least one character from each of the specified character sets.
+func ContainsAll(charSets ...CharSet) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "contains_all", func(str string) error {
+			for _, set := range charSets {
+				chars, name := set.value()
+				if !strings.ContainsAny(chars, str) {
+					return fmt.Errorf("%w: %s", ErrContainsAll, name)
+				}
 			}
+			return nil
 		}
-		return nil
-	})
+	}
+
 }
 
 // NotContains validates that a string does not contain any characters from the specified character sets.
-func NotContains(charSets ...CharSet) dvo.Validator[string] {
-	return dvo.NewValidator("not_contains", func(str string) error {
-		for _, set := range charSets {
-			chars, name := set.value()
-			if strings.ContainsAny(str, chars) {
-				return fmt.Errorf("must not contain any characters from: %s", name)
+func NotContains(charSets ...CharSet) types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "not_contains", func(str string) error {
+			for _, set := range charSets {
+				chars, name := set.value()
+				if strings.ContainsAny(str, chars) {
+					return fmt.Errorf("%s: %s", ErrNotContainsSet, name)
+				}
 			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Match validates that a string matches a given pattern.
@@ -155,132 +201,154 @@ func NotContains(charSets ...CharSet) dvo.Validator[string] {
 //   - `?`: matches any single non-separator character.
 //
 // Example: Match("foo*") will match "foobar", "foo", etc.
-func Match(pattern string) dvo.Validator[string] {
+func Match(pattern string) types.ValidateFunc[string] {
 	if !match.IsPattern(pattern) {
 		panic(fmt.Sprintf("invalid pattern provided to Match validator: %s", pattern))
 	}
-	return dvo.NewValidator("match", func(str string) error {
-		if !match.Match(str, pattern) {
-			return fmt.Errorf("does not match required pattern")
+	return func() (string, types.Validator[string]) {
+		return "match", func(str string) error {
+			if !match.Match(str, pattern) {
+				return fmt.Errorf("%w %s", ErrNotMatch, pattern)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Email validates that a string is a valid email address.
-func Email() dvo.Validator[string] {
-	return dvo.NewValidator("email", func(str string) error {
-		_, err := mail.ParseAddress(str)
-		if err != nil {
-			return fmt.Errorf("is not a valid email address")
+func Email() types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "email", func(str string) error {
+			_, err := mail.ParseAddress(str)
+			if err != nil {
+				return fmt.Errorf("%w:%s", ErrNotValidEmail, str)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // URL validates that a string is a valid URL.
-func URL() dvo.Validator[string] {
-	return dvo.NewValidator("url", func(str string) error {
-		u, err := url.Parse(str)
-		if err != nil {
-			return fmt.Errorf("is not a valid URL")
+func URL() types.ValidateFunc[string] {
+	return func() (string, types.Validator[string]) {
+		return "url", func(str string) error {
+			u, err := url.Parse(str)
+			if err != nil {
+				return fmt.Errorf("%w: %s", ErrNotValidURL, str)
+			}
+			if u.Scheme == "" || u.Host == "" {
+				return fmt.Errorf("%w: %s", ErrNotValidURL, str)
+			}
+			return nil
 		}
-		if u.Scheme == "" || u.Host == "" {
-			return fmt.Errorf("is not a valid URL")
-		}
-		return nil
-	})
+	}
 }
 
-// --- Generic and Comparison Validators ---
+// --- Generic and Comparison types.Validators ---
 
 // OneOf validates that a value is one of the allowed values.
 // This works for any comparable type in JSONType (string, bool, all numbers).
-func OneOf[T dvo.JSONType](allowed []T) dvo.Validator[T] {
-	return dvo.NewValidator("one_of", func(val T) error {
-		if !lo.Contains(allowed, val) {
-			return fmt.Errorf("value must be one of %v", allowed)
+func OneOf[T types.JSONType](allowed []T) types.ValidateFunc[T] {
+	return func() (string, types.Validator[T]) {
+		return "one_of", func(val T) error {
+			if !lo.Contains(allowed, val) {
+				return fmt.Errorf("%w:%v", ErrNotOneOf, allowed)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Gt validates that a value is greater than the specified minimum.
-func Gt[T dvo.Number | time.Time](min T) dvo.Validator[T] {
-	return dvo.NewValidator("gt", func(val T) error {
-		if !isGreaterThan(val, min) {
-			return fmt.Errorf("must be greater than %v", min)
+func Gt[T types.Number | time.Time](min T) types.ValidateFunc[T] {
+	return func() (string, types.Validator[T]) {
+		return "gt", func(val T) error {
+			if !isGreaterThan(val, min) {
+				return fmt.Errorf("%w %v", ErrMustGt, min)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Gte validates that a value is greater than or equal to the specified minimum.
-func Gte[T dvo.Number | time.Time](min T) dvo.Validator[T] {
-	return dvo.NewValidator("gte", func(val T) error {
-		if isLessThan(val, min) {
-			return fmt.Errorf("must be greater than or equal to %v", min)
+func Gte[T types.Number | time.Time](min T) types.ValidateFunc[T] {
+	return func() (string, types.Validator[T]) {
+		return "gte", func(val T) error {
+			if isLessThan(val, min) {
+				return fmt.Errorf("%w %v", ErrMustGte, min)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Lt validates that a value is less than the specified maximum.
-func Lt[T dvo.Number | time.Time](max T) dvo.Validator[T] {
-	return dvo.NewValidator("lt", func(val T) error {
-		if !isLessThan(val, max) {
-			return fmt.Errorf("must be less than %v", max)
+func Lt[T types.Number | time.Time](max T) types.ValidateFunc[T] {
+	return func() (string, types.Validator[T]) {
+		return "lt", func(val T) error {
+			if !isLessThan(val, max) {
+				return fmt.Errorf("%w %v", ErrMustLt, max)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Lte validates that a value is less than or equal to the specified maximum.
-func Lte[T dvo.Number | time.Time](max T) dvo.Validator[T] {
-	return dvo.NewValidator("lte", func(val T) error {
-		if isGreaterThan(val, max) {
-			return fmt.Errorf("must be less than or equal to %v", max)
+func Lte[T types.Number | time.Time](max T) types.ValidateFunc[T] {
+	return func() (string, types.Validator[T]) {
+		return "lte", func(val T) error {
+			if isGreaterThan(val, max) {
+				return fmt.Errorf("%w %v", ErrMustLte, max)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // Between validates that a value is within a given range (inclusive of min and max).
-func Between[T dvo.Number | time.Time](min, max T) dvo.Validator[T] {
-	return dvo.NewValidator("between", func(val T) error {
-		if isLessThan(val, min) || isGreaterThan(val, max) {
-			return fmt.Errorf("must be between %v and %v", min, max)
+func Between[T types.Number | time.Time](min, max T) types.ValidateFunc[T] {
+	return func() (string, types.Validator[T]) {
+		return "between", func(val T) error {
+			if isLessThan(val, min) || isGreaterThan(val, max) {
+				return fmt.Errorf("%w %v and %v", ErrMustBetween, min, max)
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // --- Boolean Validators ---
 
 // BeTrue validates that a boolean value is true.
-func BeTrue() dvo.Validator[bool] {
-	return dvo.NewValidator("be_true", func(b bool) error {
-		if !b {
-			return fmt.Errorf("must be true")
+func BeTrue() types.ValidateFunc[bool] {
+	return func() (string, types.Validator[bool]) {
+		return "be_true", func(b bool) error {
+			if !b {
+				return ErrMustBeTrue
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // BeFalse validates that a boolean value is false.
-func BeFalse() dvo.Validator[bool] {
-	return dvo.NewValidator("be_false", func(b bool) error {
-		if b {
-			return fmt.Errorf("must be false")
+func BeFalse() types.ValidateFunc[bool] {
+	return func() (string, types.Validator[bool]) {
+		return "be_false", func(b bool) error {
+			if b {
+				return ErrMustBeFalse
+			}
+			return nil
 		}
-		return nil
-	})
+	}
 }
 
 // isGreaterThan is a helper function that compares two values of type Number or time.Time
 // and returns true if 'a' is strictly greater than 'b'.
 // It handles different numeric types and time.Time by type assertion.
-func isGreaterThan[T dvo.Number | time.Time](a, b T) bool {
+func isGreaterThan[T types.Number | time.Time](a, b T) bool {
 	switch v := any(a).(type) {
 	case time.Time:
 		return v.After(any(b).(time.Time))
@@ -306,7 +374,7 @@ func isGreaterThan[T dvo.Number | time.Time](a, b T) bool {
 // and returns true if 'a' is strictly less than 'b'.
 // It handles different numeric types and time.Time by type assertion.
 
-func isLessThan[T dvo.Number | time.Time](a, b T) bool {
+func isLessThan[T types.Number | time.Time](a, b T) bool {
 	switch v := any(a).(type) {
 	case time.Time:
 		return v.Before(any(b).(time.Time))
