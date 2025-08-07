@@ -1,63 +1,23 @@
 package dvo
 
 import (
-	"errors"
 	"fmt"
-	"github.com/samber/lo"
-	"github.com/samber/mo"
-	"github.com/tidwall/gjson"
 	"math"
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/kcmvp/dvo/constraint"
+	"github.com/samber/lo"
+	"github.com/samber/mo"
+	"github.com/tidwall/gjson"
 )
 
 // A private type to prevent key collisions in context.
 type viewObjectKeyType struct{}
 
-// ViewObjectKey is the key used to store the validated dataObject map in the request context.
+// ViewObjectKey is the key used to store the validated valueObject map in the request context.
 var ViewObjectKey = viewObjectKeyType{}
-
-type Number interface {
-	int | int8 | int16 | int32 | int64 | float32 | float64
-}
-
-// JSONType is a constraint for the actual Go types we want to validate.
-type JSONType interface {
-	Number | string | time.Time | bool
-}
-
-// Validator is a pure, type-safe function that receives an already-typed value.
-// It has a name to prevent duplicate validators on a single field.
-type Validator[T JSONType] interface {
-	// Name returns a unique machine-readable name for the validator, e.g., "min".
-	Name() string
-	// Validate performs the validation and returns an error if it fails.
-	Validate(val T) error
-}
-
-// validator is an internal implementation of the Validator interface.
-type validator[T JSONType] struct {
-	name string
-	fn   func(val T) error
-}
-
-// Name implements the Validator interface.
-func (v validator[T]) Name() string {
-	return v.name
-}
-
-// Validate implements the Validator interface.
-func (v validator[T]) Validate(val T) error {
-	return v.fn(val)
-}
-
-// NewValidator is a helper for validator implementations to create a Validator.
-// It is not intended for direct use by the end-user, but must be exported
-// for use by the validator package.
-func NewValidator[T JSONType](name string, fn func(val T) error) Validator[T] {
-	return validator[T]{name: name, fn: fn}
-}
 
 // validationError is a custom error type that holds a map of validation errors,
 // ensuring that there is only one error per field.
@@ -104,10 +64,10 @@ type viewField interface {
 	validate(json string) (value any, found bool, err error)
 }
 
-type ViewField[T JSONType] struct {
+type ViewField[T constraint.JSONType] struct {
 	name       string
 	required   bool
-	validators []Validator[T]
+	validators []constraint.Validator[T]
 }
 
 var _ viewField = (*ViewField[string])(nil)
@@ -144,7 +104,7 @@ func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
 	res := gjson.Get(json, f.name)
 	if !res.Exists() {
 		if f.required {
-			return mo.Err[T](fmt.Errorf("%s %w", f.name, ErrRequired)), false
+			return mo.Err[T](fmt.Errorf("%s %w", f.name, constraint.ErrRequired)), false
 		}
 		// For a missing optional field, return a zero value but signal it was not found.
 		return mo.Ok(*new(T)), false
@@ -158,17 +118,13 @@ func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
 
 	val := typedVal.MustGet()
 	for _, v := range f.validators {
-		if err := v.Validate(val); err != nil {
+		if err := v(val); err != nil {
 			err = fmt.Errorf("field '%s': %w", f.name, err)
 			return mo.Err[T](err), true
 		}
 	}
 	return mo.Ok(val), true
 }
-
-var ErrIntegerOverflow = errors.New("integer overflow")
-var ErrTypeMismatch = errors.New("type mismatch")
-var ErrRequired = errors.New("is required but not found")
 
 // checkBounds is a helper to check if a big.Float is within the given int64 min/max boundaries.
 func checkBounds(bf *big.Float, min, max int64) bool {
@@ -181,7 +137,7 @@ func checkBounds(bf *big.Float, min, max int64) bool {
 // It returns a mo.Result[T] which contains the typed value on success,
 // or an error if the type conversion fails or the JSON type does not match
 // the expected Go type.
-func typed[T JSONType](res gjson.Result) mo.Result[T] {
+func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 	var zero T
 	switch tt := any(zero).(type) {
 	case string:
@@ -194,7 +150,7 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 		}
 	case int, int8, int16, int32, int64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", ErrTypeMismatch, tt, res.Type))
+			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, tt, res.Type))
 		}
 
 		// Use big.Float for arbitrary-precision parsing to avoid float64 precision loss.
@@ -205,7 +161,7 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 
 		// Check if the number is a whole number.
 		if !bf.IsInt() {
-			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", ErrTypeMismatch, res.Raw))
+			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
 		}
 
 		// Check for overflow against the specific integer type and convert.
@@ -213,34 +169,34 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 		switch any(zero).(type) {
 		case int:
 			if checkBounds(bf, math.MinInt, math.MaxInt) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int(val)).(T))
 		case int8:
 			if checkBounds(bf, math.MinInt8, math.MaxInt8) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int8(val)).(T))
 		case int16:
 			if checkBounds(bf, math.MinInt16, math.MaxInt16) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int16(val)).(T))
 		case int32:
 			if checkBounds(bf, math.MinInt32, math.MaxInt32) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int32(val)).(T))
 		case int64:
 			if checkBounds(bf, math.MinInt64, math.MaxInt64) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(val).(T))
 		}
 
 	case float32, float64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", ErrTypeMismatch, res.Type))
+			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", constraint.ErrTypeMismatch, res.Type))
 		}
 		val := res.Float() // This is float64
 		switch any(zero).(type) {
@@ -271,27 +227,27 @@ func typed[T JSONType](res gjson.Result) mo.Result[T] {
 			return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", res.String()))
 		}
 	}
-	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", ErrTypeMismatch, zero, res.Type))
+	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, zero, res.Type))
 }
 
-type FieldFunc[T JSONType] func(...Validator[T]) *ViewField[T]
+type FF[T constraint.JSONType] func(...constraint.ValidateFunc[T]) *ViewField[T]
 
-func Field[T JSONType](name string, validators ...Validator[T]) FieldFunc[T] {
-	return func(additional ...Validator[T]) *ViewField[T] {
-		// Both slices are now of the same type ([]Validator[T]), so we can append directly.
-		allValidators := append(validators, additional...)
-
+func Field[T constraint.JSONType](name string, vfs ...constraint.ValidateFunc[T]) FF[T] {
+	return func(fs ...constraint.ValidateFunc[T]) *ViewField[T] {
+		afs := append(vfs, fs...)
 		names := make(map[string]struct{})
-		for _, v := range allValidators {
-			if _, exists := names[v.Name()]; exists {
-				panic(fmt.Sprintf("dvo: duplicate validator '%s' for field '%s'", v.Name(), name))
+		var nf []constraint.Validator[T]
+		for _, v := range afs {
+			n, f := v()
+			if _, exists := names[n]; exists {
+				panic(fmt.Sprintf("dvo: duplicate validator '%s' for field '%s'", n, name))
 			}
-			names[v.Name()] = struct{}{}
+			names[n] = struct{}{}
+			nf = append(nf, f)
 		}
-		// Now we use the combined slice to create the final field.
 		return &ViewField[T]{
 			name:       name,
-			validators: allValidators,
+			validators: nf,
 			required:   true,
 		}
 	}
@@ -322,9 +278,9 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 	return vo
 }
 
-// DataObject is a sealed interface for a type-safe map holding validated dataObject.
+// ValueObject is a sealed interface for a type-safe map holding validated ViewObject.
 // The seal method prevents implementations outside this package.
-type DataObject interface {
+type ValueObject interface {
 	String(name string) mo.Option[string]
 	Int(name string) mo.Option[int]
 	Int64(name string) mo.Option[int64]
@@ -336,24 +292,24 @@ type DataObject interface {
 	seal()
 }
 
-// dataObject is the private, concrete implementation of the DataObject interface.
-type dataObject map[string]any
+// valueObject is the private, concrete implementation of the ValueObject interface.
+type valueObject map[string]any
 
-func (do dataObject) Set(name string, value any) {
-	_, ok := do[name]
+func (vo valueObject) Set(name string, value any) {
+	_, ok := vo[name]
 	lo.Assertf(ok, "property %s exists, can not overwrite it", name)
-	do[name] = value
+	vo[name] = value
 }
 
-var _ DataObject = (*dataObject)(nil)
+var _ ValueObject = (*valueObject)(nil)
 
-// seal is an empty method to satisfy the sealed DataObject interface.
-func (do dataObject) seal() {}
+// seal is an empty method to satisfy the sealed ValueObject interface.
+func (vo valueObject) seal() {}
 
 // get is a generic helper to retrieve a value and assert its type.
 // It returns an Option, which will be empty if the key was not present.
 // It panics if the key exists but the type is incorrect.
-func get[T any](d dataObject, name string) mo.Option[T] {
+func get[T any](d valueObject, name string) mo.Option[T] {
 	value, ok := d[name]
 	if !ok {
 		return mo.None[T]()
@@ -367,49 +323,49 @@ func get[T any](d dataObject, name string) mo.Option[T] {
 
 // String returns an Option containing the string value for the given name.
 // It panics if the field exists but is not a string.
-func (do dataObject) String(name string) mo.Option[string] {
-	return get[string](do, name)
+func (vo valueObject) String(name string) mo.Option[string] {
+	return get[string](vo, name)
 }
 
 // Int returns an Option containing the int value for the given name.
 // It panics if the field exists but is not an int.
-func (do dataObject) Int(name string) mo.Option[int] {
-	return get[int](do, name)
+func (vo valueObject) Int(name string) mo.Option[int] {
+	return get[int](vo, name)
 }
 
 // Int64 returns an Option containing the int64 value for the given name.
 // It panics if the field exists but is not an int64.
-func (do dataObject) Int64(name string) mo.Option[int64] {
-	return get[int64](do, name)
+func (vo valueObject) Int64(name string) mo.Option[int64] {
+	return get[int64](vo, name)
 }
 
 // Float returns an Option containing the float64 value for the given name.
 // It panics if the field exists but is not a float64.
-func (do dataObject) Float(name string) mo.Option[float64] {
-	return get[float64](do, name)
+func (vo valueObject) Float(name string) mo.Option[float64] {
+	return get[float64](vo, name)
 }
 
 // Float32 returns an Option containing the float32 value for the given name.
 // It panics if the field exists but is not a float32.
-func (do dataObject) Float32(name string) mo.Option[float32] {
-	return get[float32](do, name)
+func (vo valueObject) Float32(name string) mo.Option[float32] {
+	return get[float32](vo, name)
 }
 
 // Bool returns an Option containing the bool value for the given name.
 // It panics if the field exists but is not a bool.
-func (do dataObject) Bool(name string) mo.Option[bool] {
-	return get[bool](do, name)
+func (vo valueObject) Bool(name string) mo.Option[bool] {
+	return get[bool](vo, name)
 }
 
 // Time returns an Option containing the time.Time value for the given name.
 // It panics if the field exists but is not a time.Time.
-func (do dataObject) Time(name string) mo.Option[time.Time] {
-	return get[time.Time](do, name)
+func (vo valueObject) Time(name string) mo.Option[time.Time] {
+	return get[time.Time](vo, name)
 }
 
-func (vo *ViewObject) Validate(json string) mo.Result[DataObject] {
+func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 	errs := &validationError{}
-	object := dataObject{}
+	object := valueObject{}
 	// Check for unknown fields first if not allowed.
 	if !vo.allowUnknownFields {
 		knownFields := make(map[string]struct{}, len(vo.fields))
@@ -438,7 +394,7 @@ func (vo *ViewObject) Validate(json string) mo.Result[DataObject] {
 		}
 	}
 	if err := errs.Err(); err != nil {
-		return mo.Err[DataObject](err)
+		return mo.Err[ValueObject](err)
 	}
-	return mo.Ok[DataObject](object)
+	return mo.Ok[ValueObject](object)
 }

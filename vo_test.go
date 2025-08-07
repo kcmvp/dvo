@@ -1,8 +1,8 @@
 package dvo
 
 import (
-	"errors"
 	"fmt"
+	"github.com/kcmvp/dvo/constraint"
 	"math"
 	"testing"
 	"time"
@@ -32,13 +32,13 @@ func TestTyped(t *testing.T) {
 				name:        "int_from_string_fail",
 				json:        `{"value": "123"}`,
 				targetType:  int(0),
-				expectedErr: ErrTypeMismatch,
+				expectedErr: constraint.ErrTypeMismatch,
 			},
 			{
 				name:        "int_overflow",
 				json:        fmt.Sprintf(`{"value": %d1}`, math.MaxInt), // Overflow
 				targetType:  int(0),
-				expectedErr: ErrIntegerOverflow,
+				expectedErr: constraint.ErrIntegerOverflow,
 			},
 			{
 				name:       "int8_ok",
@@ -50,7 +50,7 @@ func TestTyped(t *testing.T) {
 				name:        "int8_overflow",
 				json:        `{"value": 128}`,
 				targetType:  int8(0),
-				expectedErr: ErrIntegerOverflow,
+				expectedErr: constraint.ErrIntegerOverflow,
 			},
 			{
 				name:       "int16_ok",
@@ -62,7 +62,7 @@ func TestTyped(t *testing.T) {
 				name:        "int16_overflow",
 				json:        `{"value": 32768}`,
 				targetType:  int16(0),
-				expectedErr: ErrIntegerOverflow,
+				expectedErr: constraint.ErrIntegerOverflow,
 			},
 			{
 				name:       "int32_ok",
@@ -74,7 +74,7 @@ func TestTyped(t *testing.T) {
 				name:        "int32_overflow",
 				json:        `{"value": 2147483648}`,
 				targetType:  int32(0),
-				expectedErr: ErrIntegerOverflow,
+				expectedErr: constraint.ErrIntegerOverflow,
 			},
 			{
 				name:       "int64_ok",
@@ -86,13 +86,13 @@ func TestTyped(t *testing.T) {
 				name:        "int64_overflow",
 				json:        "{\"value\": 9223372036854775808}", // MaxInt64 + 1
 				targetType:  int64(0),
-				expectedErr: ErrIntegerOverflow,
+				expectedErr: constraint.ErrIntegerOverflow,
 			},
 			{
 				name:        "int_from_float_fail",
 				json:        `{"value": 123.45}`,
 				targetType:  int(0),
-				expectedErr: ErrTypeMismatch,
+				expectedErr: constraint.ErrTypeMismatch,
 			},
 		}
 
@@ -216,18 +216,6 @@ func TestTyped(t *testing.T) {
 	})
 }
 
-// minLength is a test helper, not part of the public API
-var errMinLength = errors.New("value is too short")
-
-func minLength(min int) Validator[string] {
-	return NewValidator[string]("minLength", func(val string) error {
-		if len(val) < min {
-			return errMinLength
-		}
-		return nil
-	})
-}
-
 func TestViewField_Validate(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -249,7 +237,7 @@ func TestViewField_Validate(t *testing.T) {
 			field:       Field[string]("name")(),
 			json:        `{}`,
 			wantFound:   false,
-			expectedErr: ErrRequired,
+			expectedErr: constraint.ErrRequired,
 		},
 		{
 			name:       "optional_field_missing",
@@ -270,21 +258,21 @@ func TestViewField_Validate(t *testing.T) {
 			field:       Field[string]("name")(),
 			json:        `{"name": 123}`,
 			wantFound:   true,
-			expectedErr: ErrTypeMismatch,
+			expectedErr: constraint.ErrTypeMismatch,
 		},
 		{
 			name:       "custom_validator_success",
-			field:      Field[string]("password")(minLength(5)),
+			field:      Field[string]("password")(constraint.MinLength(5)),
 			json:       `{"password": "valid_password"}`,
 			wantResult: mo.Ok("valid_password"),
 			wantFound:  true,
 		},
 		{
 			name:        "custom_validator_failure",
-			field:       Field[string]("password")(minLength(10)),
+			field:       Field[string]("password")(constraint.MinLength(6)),
 			json:        `{"password": "short"}`,
 			wantFound:   true,
-			expectedErr: errMinLength,
+			expectedErr: constraint.ErrLengthMin,
 		},
 	}
 

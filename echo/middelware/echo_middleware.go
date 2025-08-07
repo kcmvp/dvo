@@ -2,13 +2,14 @@ package middelware
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"sync"
+
 	"github.com/kcmvp/dvo"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
-	"io"
-	"net/http"
-	"sync"
 )
 
 // Enrich defines a function type that can enrich the validated data with additional key-value pairs.
@@ -69,11 +70,11 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 	}
 }
 
-// ViewObject retrieves the validated ViewObject from the echo context.
+// ValueObject retrieves the validated ValueObject from the echo context.
 // It returns nil if the object is not found.
-func ViewObject(c echo.Context) dvo.DataObject {
+func ValueObject(c echo.Context) dvo.ValueObject {
 	if val := c.Request().Context().Value(dvo.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.DataObject); ok {
+		if vo, ok := val.(dvo.ValueObject); ok {
 			return vo
 		}
 	}

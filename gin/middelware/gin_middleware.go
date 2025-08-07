@@ -2,13 +2,14 @@ package middelware
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"sync"
+
 	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
-	"io"
-	"net/http"
-	"sync"
 )
 
 // Enrich defines a function type for enriching the validated data.
@@ -31,7 +32,7 @@ func EnrichViewWith(enrich Enrich) {
 // It also allows for enriching the validated data using a previously set Enrich function.
 func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get a fresh ViewObject instance for this request.
+		// Get a fresh ValueObject instance for this request.
 		bts := mo.TupleToResult[[]byte](io.ReadAll(c.Request.Body))
 		if bts.IsError() {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bts.Error().Error()})
@@ -61,11 +62,11 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 	}
 }
 
-// ViewObject retrieves the validated ViewObject from the gin context.
+// ValueObject retrieves the validated ViewObject from the gin context.
 // It returns nil if the object is not found.
-func ViewObject(c *gin.Context) dvo.DataObject {
+func ValueObject(c *gin.Context) dvo.ValueObject {
 	if val := c.Request.Context().Value(dvo.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.DataObject); ok {
+		if vo, ok := val.(dvo.ValueObject); ok {
 			return vo
 		}
 	}
