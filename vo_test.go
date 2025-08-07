@@ -1,11 +1,14 @@
 package dvo
 
 import (
+	"errors"
 	"fmt"
-	"github.com/kcmvp/dvo/constraint"
 	"math"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/kcmvp/dvo/constraint"
 
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
@@ -286,6 +289,379 @@ func TestViewField_Validate(t *testing.T) {
 			} else {
 				require.False(t, gotResult.IsError(), "got unexpected error: %v", gotResult.Error())
 				require.Equal(t, tc.wantResult.MustGet(), gotResult.MustGet())
+			}
+		})
+	}
+}
+
+func TestValidationError_Error(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   *validationError
+		check func(t *testing.T, got string)
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			check: func(t *testing.T, got string) {
+				require.Equal(t, "", got)
+			},
+		},
+		{
+			name: "empty error",
+			err:  &validationError{},
+			check: func(t *testing.T, got string) {
+				require.Equal(t, "", got)
+			},
+		},
+		{
+			name: "one error",
+			err: &validationError{
+				errors: map[string]error{
+					"field1": errors.New("error 1"),
+				},
+			},
+			check: func(t *testing.T, got string) {
+				require.Equal(t, "validation failed with the following errors:- error 1", got)
+			},
+		},
+		{
+			name: "multiple errors",
+			err: &validationError{
+				errors: map[string]error{
+					"field1": errors.New("error 1"),
+					"field2": errors.New("error 2"),
+				},
+			},
+			check: func(t *testing.T, got string) {
+				require.True(t, strings.HasPrefix(got, "validation failed with the following errors:"))
+				require.Contains(t, got, "- error 1")
+				require.Contains(t, got, "- error 2")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.err.Error()
+			tt.check(t, got)
+		})
+	}
+}
+
+func TestValidationError_Add(t *testing.T) {
+	t.Run("add to nil error map", func(t *testing.T) {
+		e := &validationError{}
+		require.Nil(t, e.errors)
+		err := errors.New("some error")
+		e.Add("field1", err)
+		require.NotNil(t, e.errors)
+		require.Equal(t, err, e.errors["field1"])
+	})
+
+	t.Run("add to existing error map", func(t *testing.T) {
+		e := &validationError{
+			errors: make(map[string]error),
+		}
+		err1 := errors.New("error 1")
+		e.Add("field1", err1)
+		require.Equal(t, err1, e.errors["field1"])
+
+		err2 := errors.New("error 2")
+		e.Add("field2", err2)
+		require.Equal(t, err2, e.errors["field2"])
+		require.Len(t, e.errors, 2)
+	})
+
+	t.Run("overwrite existing error", func(t *testing.T) {
+		e := &validationError{
+			errors: make(map[string]error),
+		}
+		err1 := errors.New("error 1")
+		e.Add("field1", err1)
+		require.Equal(t, err1, e.errors["field1"])
+
+		errOverwrite := errors.New("overwrite error")
+		e.Add("field1", errOverwrite)
+		require.Equal(t, errOverwrite, e.errors["field1"])
+		require.Len(t, e.errors, 1)
+	})
+
+	t.Run("add nil error", func(t *testing.T) {
+		e := &validationError{}
+		e.Add("field1", nil)
+		require.Nil(t, e.errors)
+		require.Len(t, e.errors, 0)
+
+		e.errors = make(map[string]error)
+		e.Add("field2", nil)
+		require.Len(t, e.errors, 0)
+	})
+}
+
+func TestValidationError_Err(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     *validationError
+		wantErr bool
+	}{
+		{
+			name:    "nil validationError",
+			err:     nil,
+			wantErr: false,
+		},
+		{
+			name:    "validationError with nil errors map",
+			err:     &validationError{errors: nil},
+			wantErr: false,
+		},
+		{
+			name:    "validationError with empty errors map",
+			err:     &validationError{errors: make(map[string]error)},
+			wantErr: false,
+		},
+		{
+			name: "validationError with one error",
+			err: &validationError{
+				errors: map[string]error{
+					"field1": errors.New("error 1"),
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.err.Err()
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Equal(t, tt.err, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestViewField_validate(t *testing.T) {
+	tests := []struct {
+		name      string
+		field     viewField
+		json      string
+		wantValue any
+		wantFound bool
+		wantErr   error
+	}{
+		{
+			name:      "required_field_present_and_valid",
+			field:     Field[string]("name")(),
+			json:      `{"name": "gopher"}`,
+			wantValue: "gopher",
+			wantFound: true,
+			wantErr:   nil,
+		},
+		{
+			name:      "required_field_present_but_invalid",
+			field:     Field[string]("name")(constraint.MinLength(10)),
+			json:      `{"name": "gopher"}`,
+			wantValue: nil,
+			wantFound: true,
+			wantErr:   constraint.ErrLengthMin,
+		},
+		{
+			name:      "required_field_missing",
+			field:     Field[string]("name")(),
+			json:      `{}`,
+			wantValue: nil,
+			wantFound: false,
+			wantErr:   constraint.ErrRequired,
+		},
+		{
+			name:      "optional_field_missing",
+			field:     Field[string]("name")().Optional(),
+			json:      `{}`,
+			wantValue: nil,
+			wantFound: false,
+			wantErr:   nil,
+		},
+		{
+			name:      "optional_field_present_and_valid",
+			field:     Field[string]("name")().Optional(),
+			json:      `{"name": "gopher"}`,
+			wantValue: "gopher",
+			wantFound: true,
+			wantErr:   nil,
+		},
+		{
+			name:      "optional_field_present_but_invalid",
+			field:     Field[string]("name")(constraint.MinLength(10)).Optional(),
+			json:      `{"name": "gopher"}`,
+			wantValue: nil,
+			wantFound: true,
+			wantErr:   constraint.ErrLengthMin,
+		},
+		{
+			name:      "type_mismatch",
+			field:     Field[int]("age")(),
+			json:      `{"age": "not-an-age"}`,
+			wantValue: nil,
+			wantFound: true,
+			wantErr:   constraint.ErrTypeMismatch,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotValue, gotFound, gotErr := tc.field.validate(tc.json)
+
+			require.Equal(t, tc.wantFound, gotFound)
+			require.Equal(t, tc.wantValue, gotValue)
+
+			if tc.wantErr != nil {
+				require.Error(t, gotErr)
+				require.ErrorIs(t, gotErr, tc.wantErr)
+			} else {
+				require.NoError(t, gotErr)
+			}
+		})
+	}
+}
+
+func TestWithFields(t *testing.T) {
+	tests := []struct {
+		name        string
+		fields      []viewField
+		shouldPanic bool
+	}{
+		{
+			name:        "no fields",
+			fields:      []viewField{},
+			shouldPanic: false,
+		},
+		{
+			name:        "one field",
+			fields:      []viewField{Field[string]("name")()},
+			shouldPanic: false,
+		},
+		{
+			name: "multiple unique fields",
+			fields: []viewField{
+				Field[string]("name")(),
+				Field[int]("age")(),
+			},
+			shouldPanic: false,
+		},
+		{
+			name: "duplicate field name",
+			fields: []viewField{
+				Field[string]("name")(),
+				Field[int]("name")(),
+			},
+			shouldPanic: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.shouldPanic {
+				require.Panics(t, func() {
+					WithFields(tc.fields...)
+				})
+			} else {
+				vo := WithFields(tc.fields...)
+				require.NotNil(t, vo)
+				require.Len(t, vo.fields, len(tc.fields))
+			}
+		})
+	}
+}
+
+func TestViewObject_AllowUnknownFields(t *testing.T) {
+	tests := []struct {
+		name          string
+		vo            *ViewObject
+		json          string
+		allowUnknown  bool
+		expectErr     bool
+		errContains   string
+		expectVal     string
+		expectPresent bool
+	}{
+		{
+			name:         "Default behavior: unknown fields not allowed, should error",
+			vo:           WithFields(Field[string]("name")()),
+			json:         `{"name": "gopher", "extra": "field"}`,
+			allowUnknown: false,
+			expectErr:    true,
+			errContains:  "unknown field 'extra'",
+		},
+		{
+			name:          "AllowUnknownFields enabled: unknown fields allowed, should not error",
+			vo:            WithFields(Field[string]("name")()),
+			json:          `{"name": "gopher", "extra": "field"}`,
+			allowUnknown:  true,
+			expectErr:     false,
+			expectVal:     "gopher",
+			expectPresent: true,
+		},
+		{
+			name:         "No unknown fields: should not error (default)",
+			vo:           WithFields(Field[string]("name")()),
+			json:         `{"name": "gopher"}`,
+			allowUnknown: false,
+			expectErr:    false,
+		},
+		{
+			name:         "No unknown fields: should not error (allowed)",
+			vo:           WithFields(Field[string]("name")()),
+			json:         `{"name": "gopher"}`,
+			allowUnknown: true,
+			expectErr:    false,
+		},
+		{
+			name:         "Corner case: empty JSON, should not error",
+			vo:           WithFields(Field[string]("name")()),
+			json:         `{}`,
+			allowUnknown: false,
+			expectErr:    true, // required field is missing
+			errContains:  "name is required",
+		},
+		{
+			name:         "Corner case: empty ViewObject, should not error",
+			vo:           WithFields(),
+			json:         `{"name": "gopher"}`,
+			allowUnknown: true,
+			expectErr:    false,
+		},
+		{
+			name:         "Corner case: empty ViewObject, unknown fields disallowed, should error",
+			vo:           WithFields(),
+			json:         `{"name": "gopher"}`,
+			allowUnknown: false,
+			expectErr:    true,
+			errContains:  "unknown field 'name'",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.allowUnknown {
+				// Test that the method is chainable
+				returnedVo := tc.vo.AllowUnknownFields()
+				require.Same(t, tc.vo, returnedVo, "AllowUnknownFields should be chainable")
+			}
+
+			res := tc.vo.Validate(tc.json)
+
+			if tc.expectErr {
+				require.True(t, res.IsError(), "expected an error but got none")
+				require.Contains(t, res.Error().Error(), tc.errContains, "error message does not contain expected text")
+			} else {
+				require.False(t, res.IsError(), "got unexpected error: %v", res.Error())
+				if tc.expectPresent {
+					val, ok := res.MustGet().String("name").Get()
+					require.True(t, ok)
+					require.Equal(t, tc.expectVal, val)
+				}
 			}
 		})
 	}
