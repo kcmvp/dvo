@@ -2,15 +2,15 @@ package dvo
 
 import (
 	"fmt"
-	"github.com/kcmvp/dvo/types"
-	"github.com/kcmvp/dvo/validator"
-	"github.com/samber/lo"
-	"github.com/samber/mo"
-	"github.com/tidwall/gjson"
 	"math"
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/kcmvp/dvo/constraint"
+	"github.com/samber/lo"
+	"github.com/samber/mo"
+	"github.com/tidwall/gjson"
 )
 
 // A private type to prevent key collisions in context.
@@ -64,10 +64,10 @@ type viewField interface {
 	validate(json string) (value any, found bool, err error)
 }
 
-type ViewField[T types.JSONType] struct {
+type ViewField[T constraint.JSONType] struct {
 	name       string
 	required   bool
-	validators []types.Validator[T]
+	validators []constraint.Validator[T]
 }
 
 var _ viewField = (*ViewField[string])(nil)
@@ -104,7 +104,7 @@ func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
 	res := gjson.Get(json, f.name)
 	if !res.Exists() {
 		if f.required {
-			return mo.Err[T](fmt.Errorf("%s %w", f.name, validator.ErrRequired)), false
+			return mo.Err[T](fmt.Errorf("%s %w", f.name, constraint.ErrRequired)), false
 		}
 		// For a missing optional field, return a zero value but signal it was not found.
 		return mo.Ok(*new(T)), false
@@ -137,7 +137,7 @@ func checkBounds(bf *big.Float, min, max int64) bool {
 // It returns a mo.Result[T] which contains the typed value on success,
 // or an error if the type conversion fails or the JSON type does not match
 // the expected Go type.
-func typed[T types.JSONType](res gjson.Result) mo.Result[T] {
+func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 	var zero T
 	switch tt := any(zero).(type) {
 	case string:
@@ -150,7 +150,7 @@ func typed[T types.JSONType](res gjson.Result) mo.Result[T] {
 		}
 	case int, int8, int16, int32, int64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", validator.ErrTypeMismatch, tt, res.Type))
+			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, tt, res.Type))
 		}
 
 		// Use big.Float for arbitrary-precision parsing to avoid float64 precision loss.
@@ -161,7 +161,7 @@ func typed[T types.JSONType](res gjson.Result) mo.Result[T] {
 
 		// Check if the number is a whole number.
 		if !bf.IsInt() {
-			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", validator.ErrTypeMismatch, res.Raw))
+			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
 		}
 
 		// Check for overflow against the specific integer type and convert.
@@ -169,34 +169,34 @@ func typed[T types.JSONType](res gjson.Result) mo.Result[T] {
 		switch any(zero).(type) {
 		case int:
 			if checkBounds(bf, math.MinInt, math.MaxInt) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int(val)).(T))
 		case int8:
 			if checkBounds(bf, math.MinInt8, math.MaxInt8) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int8(val)).(T))
 		case int16:
 			if checkBounds(bf, math.MinInt16, math.MaxInt16) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int16(val)).(T))
 		case int32:
 			if checkBounds(bf, math.MinInt32, math.MaxInt32) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(int32(val)).(T))
 		case int64:
 			if checkBounds(bf, math.MinInt64, math.MaxInt64) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, validator.ErrIntegerOverflow))
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
 			}
 			return mo.Ok(any(val).(T))
 		}
 
 	case float32, float64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", validator.ErrTypeMismatch, res.Type))
+			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", constraint.ErrTypeMismatch, res.Type))
 		}
 		val := res.Float() // This is float64
 		switch any(zero).(type) {
@@ -227,16 +227,16 @@ func typed[T types.JSONType](res gjson.Result) mo.Result[T] {
 			return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", res.String()))
 		}
 	}
-	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", validator.ErrTypeMismatch, zero, res.Type))
+	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, zero, res.Type))
 }
 
-type FieldFunc[T types.JSONType] func(...types.ValidateFunc[T]) *ViewField[T]
+type FF[T constraint.JSONType] func(...constraint.ValidateFunc[T]) *ViewField[T]
 
-func Field[T types.JSONType](name string, vfs ...types.ValidateFunc[T]) FieldFunc[T] {
-	return func(fs ...types.ValidateFunc[T]) *ViewField[T] {
+func Field[T constraint.JSONType](name string, vfs ...constraint.ValidateFunc[T]) FF[T] {
+	return func(fs ...constraint.ValidateFunc[T]) *ViewField[T] {
 		afs := append(vfs, fs...)
 		names := make(map[string]struct{})
-		var nf []types.Validator[T]
+		var nf []constraint.Validator[T]
 		for _, v := range afs {
 			n, f := v()
 			if _, exists := names[n]; exists {
@@ -278,9 +278,9 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 	return vo
 }
 
-// DataObject is a sealed interface for a type-safe map holding validated dataObject.
+// ValueObject is a sealed interface for a type-safe map holding validated ViewObject.
 // The seal method prevents implementations outside this package.
-type DataObject interface {
+type ValueObject interface {
 	String(name string) mo.Option[string]
 	Int(name string) mo.Option[int]
 	Int64(name string) mo.Option[int64]
@@ -292,7 +292,7 @@ type DataObject interface {
 	seal()
 }
 
-// dataObject is the private, concrete implementation of the DataObject interface.
+// dataObject is the private, concrete implementation of the ValueObject interface.
 type dataObject map[string]any
 
 func (do dataObject) Set(name string, value any) {
@@ -301,9 +301,9 @@ func (do dataObject) Set(name string, value any) {
 	do[name] = value
 }
 
-var _ DataObject = (*dataObject)(nil)
+var _ ValueObject = (*dataObject)(nil)
 
-// seal is an empty method to satisfy the sealed DataObject interface.
+// seal is an empty method to satisfy the sealed ValueObject interface.
 func (do dataObject) seal() {}
 
 // get is a generic helper to retrieve a value and assert its type.
@@ -363,7 +363,7 @@ func (do dataObject) Time(name string) mo.Option[time.Time] {
 	return get[time.Time](do, name)
 }
 
-func (vo *ViewObject) Validate(json string) mo.Result[DataObject] {
+func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 	errs := &validationError{}
 	object := dataObject{}
 	// Check for unknown fields first if not allowed.
@@ -394,7 +394,7 @@ func (vo *ViewObject) Validate(json string) mo.Result[DataObject] {
 		}
 	}
 	if err := errs.Err(); err != nil {
-		return mo.Err[DataObject](err)
+		return mo.Err[ValueObject](err)
 	}
-	return mo.Ok[DataObject](object)
+	return mo.Ok[ValueObject](object)
 }

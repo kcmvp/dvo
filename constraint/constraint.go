@@ -1,9 +1,8 @@
-package validator
+package constraint
 
 import (
 	"errors"
 	"fmt"
-	"github.com/kcmvp/dvo/types"
 	"github.com/tidwall/match"
 	"net/mail"
 	"net/url"
@@ -75,8 +74,8 @@ func (set CharSet) value() (chars string, name string) {
 // --- String Validators ---
 
 // MinLength validates that a string's length is at least the specified minimum.
-func MinLength(min int) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func MinLength(min int) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "min_length", func(str string) error {
 			if len(str) < min {
 				return fmt.Errorf("%w %d ", ErrLengthMin, min)
@@ -87,8 +86,8 @@ func MinLength(min int) types.ValidateFunc[string] {
 }
 
 // MaxLength validates that a string's length is at most the specified maximum.
-func MaxLength(max int) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func MaxLength(max int) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "max_length", func(str string) error {
 			if len(str) > max {
 				return fmt.Errorf("%w %d ", ErrLengthMax, max)
@@ -99,8 +98,8 @@ func MaxLength(max int) types.ValidateFunc[string] {
 }
 
 // ExactLength validates that a string's length is exactly the specified length.
-func ExactLength(length int) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func ExactLength(length int) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "exact_length", func(str string) error {
 			if len(str) != length {
 				return fmt.Errorf("%w %d characters", ErrLengthExact, length)
@@ -112,8 +111,8 @@ func ExactLength(length int) types.ValidateFunc[string] {
 }
 
 // LengthBetween validates that a string's length is within a given range (inclusive).
-func LengthBetween(min, max int) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func LengthBetween(min, max int) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "length_between", func(str string) error {
 			length := len(str)
 			if length < min || length > max {
@@ -125,8 +124,8 @@ func LengthBetween(min, max int) types.ValidateFunc[string] {
 }
 
 // OnlyContains validates that a string only contains characters from the specified character sets.
-func OnlyContains(charSets ...CharSet) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func OnlyContains(charSets ...CharSet) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "only_contains", func(str string) error {
 			var allChars strings.Builder
 			var names []string
@@ -146,8 +145,8 @@ func OnlyContains(charSets ...CharSet) types.ValidateFunc[string] {
 }
 
 // ContainsAny validates that a string contains at least one character from any of the specified character sets.
-func ContainsAny(charSets ...CharSet) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func ContainsAny(charSets ...CharSet) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "contains_any", func(str string) error {
 			var allChars strings.Builder
 			var names []string
@@ -165,8 +164,8 @@ func ContainsAny(charSets ...CharSet) types.ValidateFunc[string] {
 }
 
 // ContainsAll validates that a string contains at least one character from each of the specified character sets.
-func ContainsAll(charSets ...CharSet) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func ContainsAll(charSets ...CharSet) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "contains_all", func(str string) error {
 			for _, set := range charSets {
 				chars, name := set.value()
@@ -181,8 +180,8 @@ func ContainsAll(charSets ...CharSet) types.ValidateFunc[string] {
 }
 
 // NotContains validates that a string does not contain any characters from the specified character sets.
-func NotContains(charSets ...CharSet) types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func NotContains(charSets ...CharSet) ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "not_contains", func(str string) error {
 			for _, set := range charSets {
 				chars, name := set.value()
@@ -201,9 +200,9 @@ func NotContains(charSets ...CharSet) types.ValidateFunc[string] {
 //   - `?`: matches any single non-separator character.
 //
 // Example: Match("foo*") will match "foobar", "foo", etc.
-func Match(pattern string) types.ValidateFunc[string] {
+func Match(pattern string) ValidateFunc[string] {
 	lo.Assertf(match.IsPattern(pattern), "invalid match pattern : %s(`?` stands for one character, `*` stands for any number of characters)", pattern)
-	return func() (string, types.Validator[string]) {
+	return func() (string, Validator[string]) {
 		return "match", func(str string) error {
 			if !match.Match(str, pattern) {
 				return fmt.Errorf("%w %s", ErrNotMatch, pattern)
@@ -214,8 +213,8 @@ func Match(pattern string) types.ValidateFunc[string] {
 }
 
 // Email validates that a string is a valid email address.
-func Email() types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func Email() ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "email", func(str string) error {
 			_, err := mail.ParseAddress(str)
 			if err != nil {
@@ -227,8 +226,8 @@ func Email() types.ValidateFunc[string] {
 }
 
 // URL validates that a string is a valid URL.
-func URL() types.ValidateFunc[string] {
-	return func() (string, types.Validator[string]) {
+func URL() ValidateFunc[string] {
+	return func() (string, Validator[string]) {
 		return "url", func(str string) error {
 			u, err := url.Parse(str)
 			if err != nil {
@@ -246,8 +245,8 @@ func URL() types.ValidateFunc[string] {
 
 // OneOf validates that a value is one of the allowed values.
 // This works for any comparable type in JSONType (string, bool, all numbers).
-func OneOf[T types.JSONType](allowed []T) types.ValidateFunc[T] {
-	return func() (string, types.Validator[T]) {
+func OneOf[T JSONType](allowed []T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
 		return "one_of", func(val T) error {
 			if !lo.Contains(allowed, val) {
 				return fmt.Errorf("%w:%v", ErrNotOneOf, allowed)
@@ -258,8 +257,8 @@ func OneOf[T types.JSONType](allowed []T) types.ValidateFunc[T] {
 }
 
 // Gt validates that a value is greater than the specified minimum.
-func Gt[T types.Number | time.Time](min T) types.ValidateFunc[T] {
-	return func() (string, types.Validator[T]) {
+func Gt[T Number | time.Time](min T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
 		return "gt", func(val T) error {
 			if !isGreaterThan(val, min) {
 				return fmt.Errorf("%w %v", ErrMustGt, min)
@@ -270,8 +269,8 @@ func Gt[T types.Number | time.Time](min T) types.ValidateFunc[T] {
 }
 
 // Gte validates that a value is greater than or equal to the specified minimum.
-func Gte[T types.Number | time.Time](min T) types.ValidateFunc[T] {
-	return func() (string, types.Validator[T]) {
+func Gte[T Number | time.Time](min T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
 		return "gte", func(val T) error {
 			if isLessThan(val, min) {
 				return fmt.Errorf("%w %v", ErrMustGte, min)
@@ -282,8 +281,8 @@ func Gte[T types.Number | time.Time](min T) types.ValidateFunc[T] {
 }
 
 // Lt validates that a value is less than the specified maximum.
-func Lt[T types.Number | time.Time](max T) types.ValidateFunc[T] {
-	return func() (string, types.Validator[T]) {
+func Lt[T Number | time.Time](max T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
 		return "lt", func(val T) error {
 			if !isLessThan(val, max) {
 				return fmt.Errorf("%w %v", ErrMustLt, max)
@@ -294,8 +293,8 @@ func Lt[T types.Number | time.Time](max T) types.ValidateFunc[T] {
 }
 
 // Lte validates that a value is less than or equal to the specified maximum.
-func Lte[T types.Number | time.Time](max T) types.ValidateFunc[T] {
-	return func() (string, types.Validator[T]) {
+func Lte[T Number | time.Time](max T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
 		return "lte", func(val T) error {
 			if isGreaterThan(val, max) {
 				return fmt.Errorf("%w %v", ErrMustLte, max)
@@ -306,8 +305,8 @@ func Lte[T types.Number | time.Time](max T) types.ValidateFunc[T] {
 }
 
 // Between validates that a value is within a given range (inclusive of min and max).
-func Between[T types.Number | time.Time](min, max T) types.ValidateFunc[T] {
-	return func() (string, types.Validator[T]) {
+func Between[T Number | time.Time](min, max T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
 		return "between", func(val T) error {
 			if isLessThan(val, min) || isGreaterThan(val, max) {
 				return fmt.Errorf("%w %v and %v", ErrMustBetween, min, max)
@@ -320,8 +319,8 @@ func Between[T types.Number | time.Time](min, max T) types.ValidateFunc[T] {
 // --- Boolean Validators ---
 
 // BeTrue validates that a boolean value is true.
-func BeTrue() types.ValidateFunc[bool] {
-	return func() (string, types.Validator[bool]) {
+func BeTrue() ValidateFunc[bool] {
+	return func() (string, Validator[bool]) {
 		return "be_true", func(b bool) error {
 			if !b {
 				return ErrMustBeTrue
@@ -332,8 +331,8 @@ func BeTrue() types.ValidateFunc[bool] {
 }
 
 // BeFalse validates that a boolean value is false.
-func BeFalse() types.ValidateFunc[bool] {
-	return func() (string, types.Validator[bool]) {
+func BeFalse() ValidateFunc[bool] {
+	return func() (string, Validator[bool]) {
 		return "be_false", func(b bool) error {
 			if b {
 				return ErrMustBeFalse
@@ -346,7 +345,7 @@ func BeFalse() types.ValidateFunc[bool] {
 // isGreaterThan is a helper function that compares two values of type Number or time.Time
 // and returns true if 'a' is strictly greater than 'b'.
 // It handles different numeric types and time.Time by type assertion.
-func isGreaterThan[T types.Number | time.Time](a, b T) bool {
+func isGreaterThan[T Number | time.Time](a, b T) bool {
 	switch v := any(a).(type) {
 	case time.Time:
 		return v.After(any(b).(time.Time))
@@ -382,7 +381,7 @@ func isGreaterThan[T types.Number | time.Time](a, b T) bool {
 // and returns true if 'a' is strictly less than 'b'.
 // It handles different numeric types and time.Time by type assertion.
 
-func isLessThan[T types.Number | time.Time](a, b T) bool {
+func isLessThan[T Number | time.Time](a, b T) bool {
 	switch v := any(a).(type) {
 	case time.Time:
 		return v.Before(any(b).(time.Time))
