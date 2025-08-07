@@ -1,0 +1,12 @@
+{
+  "age": 25,
+  "email": "another.user@example.com",
+  "isActive": false,
+  "rating": 3.0,
+  "username": "another",
+  "nickname": "another",
+  "countryCode": "GB",
+  "tags": "user",
+  "status": "pending",
+  "salary": 70000.0
+}

@@ -20,7 +20,7 @@ var loginVO = dvo.WithFields(
 	dvo.Field[string]("username", constraint.Email())(),
 	dvo.Field[string]("password", constraint.Match("*abc"))(),
 	dvo.Field[bool]("rememberMe", constraint.BeTrue())(),
-	dvo.Field[string]("testing", constraint.ContainsAll(constraint.LowerCaseChar))(),
+	dvo.Field[string]("testing", constraint.CharSetAny(constraint.LowerCaseChar))(),
 ).AllowUnknownFields()
 
 // loginHandler is the main business logic handler.

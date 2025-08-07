@@ -133,6 +133,13 @@ func checkBounds(bf *big.Float, min, max int64) bool {
 	return bf.Cmp(maxV) > 0 || bf.Cmp(minV) < 0
 }
 
+// checkBoundsUint is a helper to check if a big.Float is within the given uint64 max boundary.
+func checkBoundsUint(bf *big.Float, max uint64) bool {
+	maxV := new(big.Float).SetUint64(max)
+	minV := new(big.Float).SetUint64(0)
+	return bf.Cmp(maxV) > 0 || bf.Cmp(minV) < 0
+}
+
 // typed attempts to convert a gjson.Result into the specified JSONType.
 // It returns a mo.Result[T] which contains the typed value on success,
 // or an error if the type conversion fails or the JSON type does not match
@@ -153,7 +160,7 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, tt, res.Type))
 		}
 
-		// Use big.Float for arbitrary-precision parsing to avoid float64 precision loss.
+		// Use big.Float64 for arbitrary-precision parsing to avoid float64 precision loss.
 		bf, _, err := new(big.Float).Parse(res.Raw, 10)
 		if err != nil {
 			return mo.Err[T](fmt.Errorf("could not parse number: %w", err))
@@ -193,7 +200,45 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 			}
 			return mo.Ok(any(val).(T))
 		}
-
+	case uint, uint8, uint16, uint32, uint64:
+		if res.Type != gjson.Number {
+			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, tt, res.Type))
+		}
+		bf, _, err := new(big.Float).Parse(res.Raw, 10)
+		if err != nil {
+			return mo.Err[T](fmt.Errorf("could not parse number: %w", err))
+		}
+		if !bf.IsInt() {
+			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
+		}
+		val, _ := bf.Uint64()
+		switch any(zero).(type) {
+		case uint:
+			if checkBoundsUint(bf, uint64(^uint(0))) {
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
+			}
+			return mo.Ok(any(uint(val)).(T))
+		case uint8:
+			if checkBoundsUint(bf, math.MaxUint8) {
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
+			}
+			return mo.Ok(any(uint8(val)).(T))
+		case uint16:
+			if checkBoundsUint(bf, math.MaxUint16) {
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
+			}
+			return mo.Ok(any(uint16(val)).(T))
+		case uint32:
+			if checkBoundsUint(bf, math.MaxUint32) {
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
+			}
+			return mo.Ok(any(uint32(val)).(T))
+		case uint64:
+			if checkBoundsUint(bf, math.MaxUint64) {
+				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
+			}
+			return mo.Ok(any(val).(T))
+		}
 	case float32, float64:
 		if res.Type != gjson.Number {
 			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", constraint.ErrTypeMismatch, res.Type))
@@ -283,8 +328,16 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 type ValueObject interface {
 	String(name string) mo.Option[string]
 	Int(name string) mo.Option[int]
+	Int8(name string) mo.Option[int8]
+	Int16(name string) mo.Option[int16]
+	Int32(name string) mo.Option[int32]
 	Int64(name string) mo.Option[int64]
-	Float(name string) mo.Option[float64]
+	Uint(name string) mo.Option[uint]
+	Uint8(name string) mo.Option[uint8]
+	Uint16(name string) mo.Option[uint16]
+	Uint32(name string) mo.Option[uint32]
+	Uint64(name string) mo.Option[uint64]
+	Float64(name string) mo.Option[float64]
 	Float32(name string) mo.Option[float32]
 	Bool(name string) mo.Option[bool]
 	Time(name string) mo.Option[time.Time]
@@ -333,15 +386,63 @@ func (vo valueObject) Int(name string) mo.Option[int] {
 	return get[int](vo, name)
 }
 
+// Int8 returns an Option containing the int8 value for the given name.
+// It panics if the field exists but is not an int8.
+func (vo valueObject) Int8(name string) mo.Option[int8] {
+	return get[int8](vo, name)
+}
+
+// Int16 returns an Option containing the int16 value for the given name.
+// It panics if the field exists but is not an int16.
+func (vo valueObject) Int16(name string) mo.Option[int16] {
+	return get[int16](vo, name)
+}
+
+// Int32 returns an Option containing the int32 value for the given name.
+// It panics if the field exists but is not an int32.
+func (vo valueObject) Int32(name string) mo.Option[int32] {
+	return get[int32](vo, name)
+}
+
 // Int64 returns an Option containing the int64 value for the given name.
 // It panics if the field exists but is not an int64.
 func (vo valueObject) Int64(name string) mo.Option[int64] {
 	return get[int64](vo, name)
 }
 
+// Uint returns an Option containing the uint value for the given name.
+// It panics if the field exists but is not a uint.
+func (vo valueObject) Uint(name string) mo.Option[uint] {
+	return get[uint](vo, name)
+}
+
+// Uint8 returns an Option containing the uint8 value for the given name.
+// It panics if the field exists but is not a uint8.
+func (vo valueObject) Uint8(name string) mo.Option[uint8] {
+	return get[uint8](vo, name)
+}
+
+// Uint16 returns an Option containing the uint16 value for the given name.
+// It panics if the field exists but is not a uint16.
+func (vo valueObject) Uint16(name string) mo.Option[uint16] {
+	return get[uint16](vo, name)
+}
+
+// Uint32 returns an Option containing the uint32 value for the given name.
+// It panics if the field exists but is not a uint32.
+func (vo valueObject) Uint32(name string) mo.Option[uint32] {
+	return get[uint32](vo, name)
+}
+
+// Uint64 returns an Option containing the uint64 value for the given name.
+// It panics if the field exists but is not a uint64.
+func (vo valueObject) Uint64(name string) mo.Option[uint64] {
+	return get[uint64](vo, name)
+}
+
 // Float returns an Option containing the float64 value for the given name.
 // It panics if the field exists but is not a float64.
-func (vo valueObject) Float(name string) mo.Option[float64] {
+func (vo valueObject) Float64(name string) mo.Option[float64] {
 	return get[float64](vo, name)
 }
 

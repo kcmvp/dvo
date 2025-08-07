@@ -1,0 +1,12 @@
+{
+  "name": "John Doe",
+  "age": 30,
+  "isActive": true,
+  "rating": 4.5,
+  "username": "JohnDoe",
+  "nickname": "Johnny",
+  "countryCode": "US",
+  "tags": "go",
+  "status": "active",
+  "salary": 50000.0
+}

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +99,12 @@ func TestTyped(t *testing.T) {
 				targetType:  int(0),
 				expectedErr: constraint.ErrTypeMismatch,
 			},
+			{
+				name:        "int_from_bool_fail",
+				json:        `{"value": true}`,
+				targetType:  int(0),
+				expectedErr: constraint.ErrTypeMismatch,
+			},
 		}
 
 		for _, tc := range tests {
@@ -127,6 +135,123 @@ func TestTyped(t *testing.T) {
 			})
 		}
 	})
+	t.Run("unsigned integers", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			json        string
+			want        mo.Result[any]
+			targetType  any
+			expectedErr error
+		}{
+			{
+				name:       "uint_ok",
+				json:       `{"value": 123}`,
+				want:       mo.Ok(any(uint(123))),
+				targetType: uint(0),
+			},
+			{
+				name:        "uint_from_string_fail",
+				json:        `{"value": "123"}`,
+				targetType:  uint(0),
+				expectedErr: constraint.ErrTypeMismatch,
+			},
+			{
+				name:        "uint_negative_fail",
+				json:        `{"value": -1}`,
+				targetType:  uint(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
+				name:       "uint8_ok",
+				json:       `{"value": 255}`,
+				want:       mo.Ok(any(uint8(255))),
+				targetType: uint8(0),
+			},
+			{
+				name:        "uint8_overflow",
+				json:        `{"value": 256}`,
+				targetType:  uint8(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
+				name:       "uint16_ok",
+				json:       `{"value": 65535}`,
+				want:       mo.Ok(any(uint16(65535))),
+				targetType: uint16(0),
+			},
+			{
+				name:        "uint16_overflow",
+				json:        `{"value": 65536}`,
+				targetType:  uint16(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
+				name:       "uint32_ok",
+				json:       `{"value": 4294967295}`,
+				want:       mo.Ok(any(uint32(4294967295))),
+				targetType: uint32(0),
+			},
+			{
+				name:        "uint32_overflow",
+				json:        `{"value": 4294967296}`,
+				targetType:  uint32(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
+				name:       "uint64_ok",
+				json:       fmt.Sprintf(`{"value": %d}`, uint64(math.MaxUint64)),
+				want:       mo.Ok(any(uint64(math.MaxUint64))),
+				targetType: uint64(0),
+			},
+			{
+				name:        "uint64_overflow",
+				json:        fmt.Sprintf(`{"value":%s}`, "18446744073709551616"), // MaxUint64 + 1
+				targetType:  uint64(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
+				name:        "uint_from_float_fail",
+				json:        `{"value": 123.45}`,
+				targetType:  uint(0),
+				expectedErr: constraint.ErrTypeMismatch,
+			},
+			{
+				name:        "uint_from_bool_fail",
+				json:        `{"value": true}`,
+				targetType:  uint(0),
+				expectedErr: constraint.ErrTypeMismatch,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				res := gjson.Get(tc.json, "value")
+				var got mo.Result[any]
+				switch tc.targetType.(type) {
+				case uint:
+					got = mo.TupleToResult[any](typed[uint](res).Get())
+				case uint8:
+					got = mo.TupleToResult[any](typed[uint8](res).Get())
+				case uint16:
+					got = mo.TupleToResult[any](typed[uint16](res).Get())
+				case uint32:
+					got = mo.TupleToResult[any](typed[uint32](res).Get())
+				case uint64:
+					got = mo.TupleToResult[any](typed[uint64](res).Get())
+				default:
+					t.Fatalf("unhandled test type: %T", tc.targetType)
+				}
+
+				if tc.expectedErr != nil {
+					require.True(t, got.IsError(), "expected an error but got none")
+					require.ErrorIs(t, got.Error(), tc.expectedErr, "did not get expected error type")
+				} else {
+					require.False(t, got.IsError(), "got unexpected error: %v", got.Error())
+					require.Equal(t, tc.want.MustGet(), got.MustGet())
+				}
+			})
+		}
+	})
 	t.Run("floats", func(t *testing.T) {
 		tests := []struct {
 			name        string
@@ -143,7 +268,7 @@ func TestTyped(t *testing.T) {
 			},
 			{
 				name:        "float32_overflow",
-				json:        fmt.Sprintf(`{"value": %e}`, float64(math.MaxFloat32)*2),
+				json:        `{"value": 3.5e+38}`,
 				targetType:  float32(0),
 				expectedErr: true,
 			},
@@ -152,6 +277,25 @@ func TestTyped(t *testing.T) {
 				json:       `{"value": 1.7976931348623157e+308}`,
 				want:       mo.Ok(any(float64(1.7976931348623157e+308))),
 				targetType: float64(0),
+			},
+			{
+				name:        "float64_overflow",
+				json:        `{"value": 1.8e+308}`,
+				want:        mo.Ok(any(math.Inf(1))),
+				targetType:  float64(0),
+				expectedErr: false,
+			},
+			{
+				name:        "float_from_string_fail",
+				json:        `{"value": "123.45"}`,
+				targetType:  float64(0),
+				expectedErr: true,
+			},
+			{
+				name:        "float_from_bool_fail",
+				json:        `{"value": true}`,
+				targetType:  float64(0),
+				expectedErr: true,
 			},
 		}
 		for _, tc := range tests {
@@ -171,7 +315,23 @@ func TestTyped(t *testing.T) {
 					require.True(t, got.IsError(), "expected an error but got none")
 				} else {
 					require.False(t, got.IsError(), "got unexpected error: %v", got.Error())
-					require.InDelta(t, tc.want.MustGet(), got.MustGet(), 1e-9)
+					gotVal := got.MustGet()
+					wantVal := tc.want.MustGet()
+					isInf := false
+					if f, ok := wantVal.(float64); ok {
+						if math.IsInf(f, 0) {
+							isInf = true
+						}
+					} else if f, ok := wantVal.(float32); ok {
+						if math.IsInf(float64(f), 0) {
+							isInf = true
+						}
+					}
+					if isInf {
+						require.Equal(t, wantVal, gotVal)
+					} else {
+						require.InDelta(t, wantVal, gotVal, 1e-9)
+					}
 				}
 			})
 		}
@@ -662,6 +822,261 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 					require.True(t, ok)
 					require.Equal(t, tc.expectVal, val)
 				}
+			}
+		})
+	}
+}
+
+func TestEndToEnd(t *testing.T) {
+	// Define the ViewObject with various field types and constraints
+	userView := WithFields(
+		Field[string]("name")(constraint.MinLength(3)),
+		Field[int]("age")(constraint.Between(18, 120)),
+		Field[string]("email")(constraint.Email()).Optional(),
+		Field[bool]("isActive")(),
+		Field[time.Time]("createdAt")().Optional(),
+		Field[float64]("rating")(constraint.Between(0.0, 5.0)),
+		Field[string]("department")().Optional(),
+		Field[string]("username")(constraint.CharSetOnly(constraint.LowerCaseChar)),
+		Field[string]("nickname")(), // No validator for 'not contains substring' yet
+		Field[string]("countryCode")(constraint.ExactLength(2)),
+		Field[string]("homepage")(constraint.URL()).Optional(),
+		Field[string]("status")(constraint.OneOf[string]("active", "inactive", "pending")),
+		Field[string]("tags")(constraint.Match(`tag_*`)),
+		Field[float64]("salary")(constraint.Gt(0.0)),
+		// New fields for all JSON types
+		Field[int8]("level")(constraint.Between[int8](1, 100)),
+		Field[int16]("score")(constraint.Gt[int16](0)),
+		Field[int32]("views")(constraint.Gte[int32](0)),
+		Field[int64]("balance")(constraint.Gte[int64](0)),
+		Field[uint]("flags")(),
+		Field[uint8]("version")(),
+		Field[uint16]("build")(),
+		Field[uint32]("instanceId")(),
+		Field[uint64]("nonce")(),
+		Field[float32]("ratio")(constraint.Between[float32](0.0, 1.0)),
+	)
+
+	// Test cases
+	tests := []struct {
+		name    string
+		isValid bool
+		check   func(t *testing.T, vo ValueObject)
+	}{
+		{
+			name:    "valid user",
+			isValid: true,
+			check: func(t *testing.T, vo ValueObject) {
+				// String
+				name, ok := vo.String("name").Get()
+				require.True(t, ok)
+				require.Equal(t, "John Doe", name)
+				email, ok := vo.String("email").Get()
+				require.True(t, ok)
+				require.Equal(t, "john.doe@example.com", email)
+				username, ok := vo.String("username").Get()
+				require.True(t, ok)
+				require.Equal(t, "johndoe", username)
+				nickname, ok := vo.String("nickname").Get()
+				require.True(t, ok)
+				require.Equal(t, "Johnny", nickname)
+				countryCode, ok := vo.String("countryCode").Get()
+				require.True(t, ok)
+				require.Equal(t, "US", countryCode)
+				tags, ok := vo.String("tags").Get()
+				require.True(t, ok)
+				require.Equal(t, "tag_go,developer,testing", tags)
+				status, ok := vo.String("status").Get()
+				require.True(t, ok)
+				require.Equal(t, "active", status)
+
+				// Optional String not present
+				_, ok = vo.String("department").Get()
+				require.False(t, ok)
+
+				// Bool
+				isActive, ok := vo.Bool("isActive").Get()
+				require.True(t, ok)
+				require.True(t, isActive)
+
+				// Time (optional, not present)
+				_, ok = vo.Time("createdAt").Get()
+				require.False(t, ok)
+
+				// Numbers
+				age, ok := vo.Int("age").Get()
+				require.True(t, ok)
+				require.Equal(t, 30, age)
+				rating, ok := vo.Float64("rating").Get()
+				require.True(t, ok)
+				require.Equal(t, 4.5, rating)
+				salary, ok := vo.Float64("salary").Get()
+				require.True(t, ok)
+				require.Equal(t, 50000.0, salary)
+				level, ok := vo.Int8("level").Get()
+				require.True(t, ok)
+				require.Equal(t, int8(10), level)
+				score, ok := vo.Int16("score").Get()
+				require.True(t, ok)
+				require.Equal(t, int16(1000), score)
+				views, ok := vo.Int32("views").Get()
+				require.True(t, ok)
+				require.Equal(t, int32(100000), views)
+				balance, ok := vo.Int64("balance").Get()
+				require.True(t, ok)
+				require.Equal(t, int64(1000000000), balance)
+				flags, ok := vo.Uint("flags").Get()
+				require.True(t, ok)
+				require.Equal(t, uint(4294967295), flags)
+				version, ok := vo.Uint8("version").Get()
+				require.True(t, ok)
+				require.Equal(t, uint8(255), version)
+				build, ok := vo.Uint16("build").Get()
+				require.True(t, ok)
+				require.Equal(t, uint16(65535), build)
+				instanceId, ok := vo.Uint32("instanceId").Get()
+				require.True(t, ok)
+				require.Equal(t, uint32(4294967295), instanceId)
+				nonce, ok := vo.Uint64("nonce").Get()
+				require.True(t, ok)
+				require.Equal(t, uint64(18446744073709551615), nonce)
+				ratio, ok := vo.Float32("ratio").Get()
+				require.True(t, ok)
+				require.Equal(t, float32(0.5), ratio)
+			},
+		},
+		{
+			name:    "invalid rating",
+			isValid: false,
+		},
+		{
+			name:    "missing required field",
+			isValid: false,
+		},
+		{
+			name:    "valid user with all optional fields",
+			isValid: true,
+			check: func(t *testing.T, vo ValueObject) {
+				// Check optional fields that are present
+				createdAt, ok := vo.Time("createdAt").Get()
+				require.True(t, ok)
+				expectedTime, _ := time.Parse(time.RFC3339, "2024-01-01T12:00:00Z")
+				require.WithinDuration(t, expectedTime, createdAt, time.Second)
+
+				department, ok := vo.String("department").Get()
+				require.True(t, ok)
+				require.Equal(t, "Security", department)
+
+				homepage, ok := vo.String("homepage").Get()
+				require.True(t, ok)
+				require.Equal(t, "https://matrix.com", homepage)
+
+				// Also check all other fields to ensure they are correctly parsed
+				name, ok := vo.String("name").Get()
+				require.True(t, ok)
+				require.Equal(t, "John Doe", name)
+				age, ok := vo.Int("age").Get()
+				require.True(t, ok)
+				require.Equal(t, 30, age)
+				isActive, ok := vo.Bool("isActive").Get()
+				require.True(t, ok)
+				require.True(t, isActive)
+				level, ok := vo.Int8("level").Get()
+				require.True(t, ok)
+				require.Equal(t, int8(10), level)
+				score, ok := vo.Int16("score").Get()
+				require.True(t, ok)
+				require.Equal(t, int16(1000), score)
+				views, ok := vo.Int32("views").Get()
+				require.True(t, ok)
+				require.Equal(t, int32(100000), views)
+				balance, ok := vo.Int64("balance").Get()
+				require.True(t, ok)
+				require.Equal(t, int64(1000000000), balance)
+				flags, ok := vo.Uint("flags").Get()
+				require.True(t, ok)
+				require.Equal(t, uint(4294967295), flags)
+				version, ok := vo.Uint8("version").Get()
+				require.True(t, ok)
+				require.Equal(t, uint8(255), version)
+				build, ok := vo.Uint16("build").Get()
+				require.True(t, ok)
+				require.Equal(t, uint16(65535), build)
+				instanceId, ok := vo.Uint32("instanceId").Get()
+				require.True(t, ok)
+				require.Equal(t, uint32(4294967295), instanceId)
+				nonce, ok := vo.Uint64("nonce").Get()
+				require.True(t, ok)
+				require.Equal(t, uint64(18446744073709551615), nonce)
+				ratio, ok := vo.Float32("ratio").Get()
+				require.True(t, ok)
+				require.Equal(t, float32(0.5), ratio)
+			},
+		},
+		{
+			name:    "valid user without optional email",
+			isValid: true,
+			check: func(t *testing.T, vo ValueObject) {
+				_, ok := vo.String("email").Get()
+				require.False(t, ok, "email should not be present")
+
+				// Check other fields to ensure they are still valid
+				name, ok := vo.String("name").Get()
+				require.True(t, ok)
+				require.Equal(t, "John Doe", name)
+				age, ok := vo.Int("age").Get()
+				require.True(t, ok)
+				require.Equal(t, 30, age)
+				isActive, ok := vo.Bool("isActive").Get()
+				require.True(t, ok)
+				require.True(t, isActive)
+			},
+		},
+		{
+			name:    "invalid username charset",
+			isValid: false,
+		},
+		{
+			name:    "invalid countryCode length",
+			isValid: false,
+		},
+		{
+			name:    "invalid tags pattern",
+			isValid: false,
+		},
+		{
+			name:    "invalid homepage url",
+			isValid: false,
+		},
+		{
+			name:    "invalid status",
+			isValid: false,
+		},
+		{
+			name:    "invalid salary",
+			isValid: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Read json from testdata
+			jsonPath := filepath.Join("testdata", fmt.Sprintf("%s.json", strings.ReplaceAll(tc.name, " ", "_")))
+			jsonData, err := os.ReadFile(jsonPath)
+			require.NoError(t, err, "failed to read test data file")
+
+			// Validate
+			res := userView.Validate(string(jsonData))
+
+			if tc.isValid {
+				require.False(t, res.IsError(), "expected validation to succeed, but it failed with: %v", res.Error())
+				vo := res.MustGet()
+				require.NotNil(t, vo)
+				if tc.check != nil {
+					tc.check(t, vo)
+				}
+			} else {
+				require.True(t, res.IsError(), "expected validation to fail, but it succeeded")
 			}
 		})
 	}

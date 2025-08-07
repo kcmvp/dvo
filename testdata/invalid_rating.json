@@ -1,0 +1,23 @@
+{
+  "name": "Jane Doe",
+  "age": 30,
+  "email": "jane.doe@example.com",
+  "isActive": true,
+  "rating": 5.1,
+  "username": "janedoe",
+  "nickname": "Janie",
+  "countryCode": "CA",
+  "tags": "test",
+  "status": "inactive",
+  "salary": 60000.0,
+  "level": 10,
+  "score": 1000,
+  "views": 100000,
+  "balance": 1000000000,
+  "flags": 4294967295,
+  "version": 255,
+  "build": 65535,
+  "instanceId": 4294967295,
+  "nonce": 18446744073709551615,
+  "ratio": 0.5
+}
