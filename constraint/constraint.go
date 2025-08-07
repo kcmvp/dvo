@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/mo"
 	"github.com/tidwall/match"
 
 	"github.com/samber/lo"
@@ -51,21 +52,24 @@ var (
 	ErrLengthExact   = errors.New("length must be exactly")
 	ErrLengthBetween = errors.New("length must be between")
 
-	ErrCharSetOnly = errors.New("can only contain characters from")
-	ErrCharSetAny  = errors.New("must contain at least one character from")
-	ErrCharSetAll  = errors.New("not contains chars from")
-	ErrCharSetNo   = errors.New("must not contain any characters from")
-	ErrNotMatch            = errors.New("not match pattern")
-	ErrNotValidEmail       = errors.New("not valid email address")
-	ErrNotValidURL         = errors.New("not valid url")
-	ErrNotOneOf            = errors.New("value must be one of")
-	ErrMustGt              = errors.New("must be greater than")
-	ErrMustGte             = errors.New("must be greater than or equal to")
-	ErrMustLt              = errors.New("must be less than")
-	ErrMustLte             = errors.New("must be less than or equal to")
-	ErrMustBetween         = errors.New("must be between")
-	ErrMustBeTrue          = errors.New("must be true")
-	ErrMustBeFalse         = errors.New("must be false")
+	ErrMin = errors.New("must be at least")
+	ErrMax = errors.New("must be at most")
+
+	ErrCharSetOnly   = errors.New("can only contain characters from")
+	ErrCharSetAny    = errors.New("must contain at least one character from")
+	ErrCharSetAll    = errors.New("not contains chars from")
+	ErrCharSetNo     = errors.New("must not contain any characters from")
+	ErrNotMatch      = errors.New("not match pattern")
+	ErrNotValidEmail = errors.New("not valid email address")
+	ErrNotValidURL   = errors.New("not valid url")
+	ErrNotOneOf      = errors.New("value must be one of")
+	ErrMustGt        = errors.New("must be greater than")
+	ErrMustGte       = errors.New("must be greater than or equal to")
+	ErrMustLt        = errors.New("must be less than")
+	ErrMustLte       = errors.New("must be less than or equal to")
+	ErrMustBetween   = errors.New("must be between")
+	ErrMustBeTrue    = errors.New("must be true")
+	ErrMustBeFalse   = errors.New("must be false")
 )
 
 // value is a private helper to get the character set and its descriptive name.
@@ -90,10 +94,7 @@ func (set charSet) value() (chars string, name string) {
 func MinLength(min int) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "min_length", func(str string) error {
-			if len(str) < min {
-				return fmt.Errorf("%w %d ", ErrLengthMin, min)
-			}
-			return nil
+			return lo.Ternary(len(str) < min, fmt.Errorf("%w %d ", ErrLengthMin, min), nil)
 		}
 	}
 }
@@ -102,10 +103,7 @@ func MinLength(min int) ValidateFunc[string] {
 func MaxLength(max int) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "max_length", func(str string) error {
-			if len(str) > max {
-				return fmt.Errorf("%w %d ", ErrLengthMax, max)
-			}
-			return nil
+			return lo.Ternary(len(str) > max, fmt.Errorf("%w %d ", ErrLengthMax, max), nil)
 		}
 	}
 }
@@ -114,10 +112,7 @@ func MaxLength(max int) ValidateFunc[string] {
 func ExactLength(length int) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "exact_length", func(str string) error {
-			if len(str) != length {
-				return fmt.Errorf("%w %d characters", ErrLengthExact, length)
-			}
-			return nil
+			return lo.Ternary(len(str) != length, fmt.Errorf("%w %d characters", ErrLengthExact, length), nil)
 		}
 	}
 
@@ -128,10 +123,7 @@ func LengthBetween(min, max int) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "length_between", func(str string) error {
 			length := len(str)
-			if length < min || length > max {
-				return fmt.Errorf("%w %d and %d characters", ErrLengthBetween, min, max)
-			}
-			return nil
+			return lo.Ternary(length < min || length > max, fmt.Errorf("%w %d and %d characters", ErrLengthBetween, min, max), nil)
 		}
 	}
 }
@@ -168,10 +160,7 @@ func CharSetAny(charSets ...charSet) ValidateFunc[string] {
 				allChars.WriteString(chars)
 				names = append(names, name)
 			}
-			if !strings.ContainsAny(allChars.String(), str) {
-				return fmt.Errorf("%w: %s", ErrCharSetAny, strings.Join(names, ", "))
-			}
-			return nil
+			return lo.Ternary(!strings.ContainsAny(allChars.String(), str), fmt.Errorf("%w: %s", ErrCharSetAny, strings.Join(names, ", ")), nil)
 		}
 	}
 }
@@ -217,10 +206,7 @@ func Match(pattern string) ValidateFunc[string] {
 	lo.Assertf(match.IsPattern(pattern), "invalid pattern `%s`: `?` stands for one character, `*` stands for any number of characters", pattern)
 	return func() (string, Validator[string]) {
 		return "match", func(str string) error {
-			if !match.Match(str, pattern) {
-				return fmt.Errorf("%w %s", ErrNotMatch, pattern)
-			}
-			return nil
+			return lo.Ternary(!match.Match(str, pattern), fmt.Errorf("%w %s", ErrNotMatch, pattern), nil)
 		}
 	}
 }
@@ -229,11 +215,7 @@ func Match(pattern string) ValidateFunc[string] {
 func Email() ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "email", func(str string) error {
-			_, err := mail.ParseAddress(str)
-			if err != nil {
-				return fmt.Errorf("%w:%s", ErrNotValidEmail, str)
-			}
-			return nil
+			return lo.Ternary(mo.TupleToResult[*mail.Address](mail.ParseAddress(str)).IsError(), fmt.Errorf("%w:%s", ErrNotValidEmail, str), nil)
 		}
 	}
 }
@@ -242,14 +224,9 @@ func Email() ValidateFunc[string] {
 func URL() ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "url", func(str string) error {
-			u, err := url.Parse(str)
-			if err != nil {
-				return fmt.Errorf("%w: %s", ErrNotValidURL, str)
-			}
-			if u.Scheme == "" || u.Host == "" {
-				return fmt.Errorf("%w: %s", ErrNotValidURL, str)
-			}
-			return nil
+			rs := mo.TupleToResult[*url.URL](url.Parse(str))
+			errRs := rs.IsError() || rs.MustGet().Scheme == "" || rs.MustGet().Host == ""
+			return lo.Ternary(errRs, fmt.Errorf("%w: %s", ErrNotValidURL, str), nil)
 		}
 	}
 }
@@ -261,10 +238,7 @@ func URL() ValidateFunc[string] {
 func OneOf[T JSONType](allowed ...T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "one_of", func(val T) error {
-			if !lo.Contains(allowed, val) {
-				return fmt.Errorf("%w:%v", ErrNotOneOf, allowed)
-			}
-			return nil
+			return lo.Ternary(!lo.Contains(allowed, val), fmt.Errorf("%w:%v", ErrNotOneOf, allowed), nil)
 		}
 	}
 }
@@ -273,10 +247,7 @@ func OneOf[T JSONType](allowed ...T) ValidateFunc[T] {
 func Gt[T Number | time.Time](min T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "gt", func(val T) error {
-			if !isGreaterThan(val, min) {
-				return fmt.Errorf("%w %v", ErrMustGt, min)
-			}
-			return nil
+			return lo.Ternary(!isGreaterThan(val, min), fmt.Errorf("%w %v", ErrMustGt, min), nil)
 		}
 	}
 }
@@ -285,10 +256,7 @@ func Gt[T Number | time.Time](min T) ValidateFunc[T] {
 func Gte[T Number | time.Time](min T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "gte", func(val T) error {
-			if isLessThan(val, min) {
-				return fmt.Errorf("%w %v", ErrMustGte, min)
-			}
-			return nil
+			return lo.Ternary(isLessThan(val, min), fmt.Errorf("%w %v", ErrMustGte, min), nil)
 		}
 	}
 }
@@ -297,10 +265,7 @@ func Gte[T Number | time.Time](min T) ValidateFunc[T] {
 func Lt[T Number | time.Time](max T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "lt", func(val T) error {
-			if !isLessThan(val, max) {
-				return fmt.Errorf("%w %v", ErrMustLt, max)
-			}
-			return nil
+			return lo.Ternary(!isLessThan(val, max), fmt.Errorf("%w %v", ErrMustLt, max), nil)
 		}
 	}
 }
@@ -309,10 +274,7 @@ func Lt[T Number | time.Time](max T) ValidateFunc[T] {
 func Lte[T Number | time.Time](max T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "lte", func(val T) error {
-			if isGreaterThan(val, max) {
-				return fmt.Errorf("%w %v", ErrMustLte, max)
-			}
-			return nil
+			return lo.Ternary(isGreaterThan(val, max), fmt.Errorf("%w %v", ErrMustLte, max), nil)
 		}
 	}
 }
@@ -321,10 +283,25 @@ func Lte[T Number | time.Time](max T) ValidateFunc[T] {
 func Between[T Number | time.Time](min, max T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "between", func(val T) error {
-			if isLessThan(val, min) || isGreaterThan(val, max) {
-				return fmt.Errorf("%w %v and %v", ErrMustBetween, min, max)
-			}
-			return nil
+			return lo.Ternary(isLessThan(val, min) || isGreaterThan(val, max), fmt.Errorf("%w %v and %v", ErrMustBetween, min, max), nil)
+		}
+	}
+}
+
+// Min validates that a number or time.Time is greater than or equal to a minimum value.
+func Min[T Number | time.Time](min T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
+		return "min_number_date", func(val T) error {
+			return lo.Ternary(isLessThan(val, min), fmt.Errorf("%w %v", ErrMin, min), nil)
+		}
+	}
+}
+
+// Max validates that a number or time.Time is less than or equal to a maximum value.
+func Max[T Number | time.Time](max T) ValidateFunc[T] {
+	return func() (string, Validator[T]) {
+		return "max_number_date", func(val T) error {
+			return lo.Ternary(isGreaterThan(val, max), fmt.Errorf("%w %v", ErrMax, max), nil)
 		}
 	}
 }
@@ -335,10 +312,7 @@ func Between[T Number | time.Time](min, max T) ValidateFunc[T] {
 func BeTrue() ValidateFunc[bool] {
 	return func() (string, Validator[bool]) {
 		return "be_true", func(b bool) error {
-			if !b {
-				return ErrMustBeTrue
-			}
-			return nil
+			return lo.Ternary(!b, ErrMustBeTrue, nil)
 		}
 	}
 }
@@ -347,10 +321,7 @@ func BeTrue() ValidateFunc[bool] {
 func BeFalse() ValidateFunc[bool] {
 	return func() (string, Validator[bool]) {
 		return "be_false", func(b bool) error {
-			if b {
-				return ErrMustBeFalse
-			}
-			return nil
+			return lo.Ternary(b, ErrMustBeFalse, nil)
 		}
 	}
 }
