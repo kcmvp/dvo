@@ -1,0 +1,22 @@
+{
+  "name": "John Doe",
+  "age": 30,
+  "isActive": true,
+  "rating": 4.5,
+  "username": "johndoe",
+  "nickname": "Johnny",
+  "countryCode": "US",
+  "status": "active",
+  "tags": "tag_go,developer,testing",
+  "salary": 50000.0,
+  "level": 10,
+  "score": 1000,
+  "views": 100000,
+  "balance": 1000000000,
+  "flags": 4294967295,
+  "version": 255,
+  "build": 65535,
+  "instanceId": 4294967295,
+  "nonce": 18446744073709551615,
+  "ratio": 0.5
+}

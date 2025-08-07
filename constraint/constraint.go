@@ -51,10 +51,10 @@ var (
 	ErrLengthExact   = errors.New("length must be exactly")
 	ErrLengthBetween = errors.New("length must be between")
 
-	ErrOnlyContainsCharSet = errors.New("can only contain characters from")
-	ErrContainsAnyCharSet  = errors.New("must contain at least one character from")
-	ErrContainsAll         = errors.New("not contains chars from")
-	ErrNotContainsSet      = errors.New("must not contain any characters from")
+	ErrCharSetOnly = errors.New("can only contain characters from")
+	ErrCharSetAny  = errors.New("must contain at least one character from")
+	ErrCharSetAll  = errors.New("not contains chars from")
+	ErrCharSetNo   = errors.New("must not contain any characters from")
 	ErrNotMatch            = errors.New("not match pattern")
 	ErrNotValidEmail       = errors.New("not valid email address")
 	ErrNotValidURL         = errors.New("not valid url")
@@ -136,8 +136,8 @@ func LengthBetween(min, max int) ValidateFunc[string] {
 	}
 }
 
-// OnlyContains validates that a string only contains characters from the specified character sets.
-func OnlyContains(charSets ...charSet) ValidateFunc[string] {
+// CharSetOnly validates that a string only contains characters from the specified character sets.
+func CharSetOnly(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "only_contains", func(str string) error {
 			var allChars strings.Builder
@@ -149,7 +149,7 @@ func OnlyContains(charSets ...charSet) ValidateFunc[string] {
 			}
 			for _, r := range str {
 				if !strings.ContainsRune(allChars.String(), r) {
-					return fmt.Errorf("%w: %s", ErrOnlyContainsCharSet, strings.Join(names, ", "))
+					return fmt.Errorf("%w: %s", ErrCharSetOnly, strings.Join(names, ", "))
 				}
 			}
 			return nil
@@ -157,8 +157,8 @@ func OnlyContains(charSets ...charSet) ValidateFunc[string] {
 	}
 }
 
-// ContainsAny validates that a string contains at least one character from any of the specified character sets.
-func ContainsAny(charSets ...charSet) ValidateFunc[string] {
+// CharSetAny validates that a string contains at least one character from any of the specified character sets.
+func CharSetAny(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "contains_any", func(str string) error {
 			var allChars strings.Builder
@@ -169,21 +169,21 @@ func ContainsAny(charSets ...charSet) ValidateFunc[string] {
 				names = append(names, name)
 			}
 			if !strings.ContainsAny(allChars.String(), str) {
-				return fmt.Errorf("%w: %s", ErrContainsAnyCharSet, strings.Join(names, ", "))
+				return fmt.Errorf("%w: %s", ErrCharSetAny, strings.Join(names, ", "))
 			}
 			return nil
 		}
 	}
 }
 
-// ContainsAll validates that a string contains at least one character from each of the specified character sets.
-func ContainsAll(charSets ...charSet) ValidateFunc[string] {
+// CharSetAll validates that a string contains at least one character from each of the specified character sets.
+func CharSetAll(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "contains_all", func(str string) error {
 			for _, set := range charSets {
 				chars, name := set.value()
 				if !strings.ContainsAny(chars, str) {
-					return fmt.Errorf("%w: %s", ErrContainsAll, name)
+					return fmt.Errorf("%w: %s", ErrCharSetAll, name)
 				}
 			}
 			return nil
@@ -192,14 +192,14 @@ func ContainsAll(charSets ...charSet) ValidateFunc[string] {
 
 }
 
-// NotContains validates that a string does not contain any characters from the specified character sets.
-func NotContains(charSets ...charSet) ValidateFunc[string] {
+// CharSetNo validates that a string does not contain any characters from the specified character sets.
+func CharSetNo(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "not_contains", func(str string) error {
 			for _, set := range charSets {
 				chars, name := set.value()
 				if strings.ContainsAny(str, chars) {
-					return fmt.Errorf("%s: %s", ErrNotContainsSet, name)
+					return fmt.Errorf("%s: %s", ErrCharSetNo, name)
 				}
 			}
 			return nil
@@ -258,7 +258,7 @@ func URL() ValidateFunc[string] {
 
 // OneOf validates that a value is one of the allowed values.
 // This works for any comparable type in JSONType (string, bool, all numbers).
-func OneOf[T JSONType](allowed []T) ValidateFunc[T] {
+func OneOf[T JSONType](allowed ...T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "one_of", func(val T) error {
 			if !lo.Contains(allowed, val) {

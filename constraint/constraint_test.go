@@ -107,7 +107,7 @@ func TestLengthBetween(t *testing.T) {
 	}
 }
 
-func TestOnlyContains(t *testing.T) {
+func TestCharSetOnly(t *testing.T) {
 	tests := []struct {
 		name     string
 		charSets []charSet
@@ -122,15 +122,15 @@ func TestOnlyContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, v := OnlyContains(tt.charSets...)()
+			_, v := CharSetOnly(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
-				t.Errorf("OnlyContains() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("CharSetOnly() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestContainsAny(t *testing.T) {
+func TestCharSetAny(t *testing.T) {
 	tests := []struct {
 		name     string
 		charSets []charSet
@@ -146,15 +146,15 @@ func TestContainsAny(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, v := ContainsAny(tt.charSets...)()
+			_, v := CharSetAny(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
-				t.Errorf("ContainsAny() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("CharSetAny() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestContainsAll(t *testing.T) {
+func TestCharSetAll(t *testing.T) {
 	tests := []struct {
 		name     string
 		charSets []charSet
@@ -170,15 +170,15 @@ func TestContainsAll(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, v := ContainsAll(tt.charSets...)()
+			_, v := CharSetAll(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
-				t.Errorf("ContainsAll() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("CharSetAll() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestNotContains(t *testing.T) {
+func TestCharSetNo(t *testing.T) {
 	tests := []struct {
 		name     string
 		charSets []charSet
@@ -193,9 +193,9 @@ func TestNotContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, v := NotContains(tt.charSets...)()
+			_, v := CharSetNo(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
-				t.Errorf("NotContains() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("CharSetNo() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -262,7 +262,7 @@ func TestEmail(t *testing.T) {
 		{"valid email", "test@example.com", false},
 		{"valid with subdomain", "test@mail.example.com", false},
 		{"valid with plus alias", "test+alias@example.com", false},
-		{"valid with display name", `'"John Doe" <test@example.com>'`, true},
+		{"valid with display name", `''"John Doe" <test@example.com>'`, true},
 		{"invalid email", "test", true},
 		{"invalid email", "test@", true},
 		{"@example.com", "@example.com", true},
@@ -323,7 +323,7 @@ func TestOneOf(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				_, v := OneOf[string](tt.allowed)()
+				_, v := OneOf[string](tt.allowed...)()
 				if err := v(tt.val); (err != nil) != tt.wantErr {
 					t.Errorf("OneOf() error = %v, wantErr %v", err, tt.wantErr)
 				}
@@ -344,7 +344,7 @@ func TestOneOf(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				_, v := OneOf[int](tt.allowed)()
+				_, v := OneOf[int](tt.allowed...)()
 				if err := v(tt.val); (err != nil) != tt.wantErr {
 					t.Errorf("OneOf() error = %v, wantErr %v", err, tt.wantErr)
 				}
@@ -364,7 +364,7 @@ func TestOneOf(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				_, v := OneOf[bool](tt.allowed)()
+				_, v := OneOf[bool](tt.allowed...)()
 				if err := v(tt.val); (err != nil) != tt.wantErr {
 					t.Errorf("OneOf() error = %v, wantErr %v", err, tt.wantErr)
 				}
