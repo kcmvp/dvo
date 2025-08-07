@@ -17,6 +17,7 @@ func TestMinLength(t *testing.T) {
 		{"longer", 5, "abcdef", false},
 		{"empty string below min", 5, "", true},
 		{"empty string at min 0", 0, "", false},
+		{"negative min", -1, "abc", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -39,6 +40,9 @@ func TestMaxLength(t *testing.T) {
 		{"exact length", 5, "abcde", false},
 		{"shorter", 5, "abc", false},
 		{"empty string", 5, "", false},
+		{"max is 0", 0, "a", true},
+		{"max is 0 empty", 0, "", false},
+		{"negative max", -1, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,6 +66,7 @@ func TestExactLength(t *testing.T) {
 		{"exact length", 5, "abcde", false},
 		{"empty string want 0", 0, "", false},
 		{"empty string want 5", 5, "", true},
+		{"negative length", -1, "a", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,6 +93,9 @@ func TestLengthBetween(t *testing.T) {
 		{"in between", 3, 5, "abcd", false},
 		{"empty string too short", 3, 5, "", true},
 		{"empty string in range", 0, 5, "", false},
+		{"min > max", 5, 3, "abcd", true},
+		{"negative max", 1, -1, "abc", true},
+		{"min > max again", 10, 8, "123456789", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,13 +110,15 @@ func TestLengthBetween(t *testing.T) {
 func TestOnlyContains(t *testing.T) {
 	tests := []struct {
 		name     string
-		charSets []CharSet
+		charSets []charSet
 		str      string
 		wantErr  bool
 	}{
-		{"only lower", []CharSet{LowerCaseChar}, "abc", false},
-		{"only lower with number", []CharSet{LowerCaseChar}, "abc1", true},
-		{"only lower and number", []CharSet{LowerCaseChar, NumberChar}, "abc1", false},
+		{"only lower", []charSet{LowerCaseChar}, "abc", false},
+		{"only lower with number", []charSet{LowerCaseChar}, "abc1", true},
+		{"only lower and number", []charSet{LowerCaseChar, NumberChar}, "abc1", false},
+		{"empty string", []charSet{LowerCaseChar}, "", false},
+		{"no charsets", []charSet{}, "abc", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,14 +133,16 @@ func TestOnlyContains(t *testing.T) {
 func TestContainsAny(t *testing.T) {
 	tests := []struct {
 		name     string
-		charSets []CharSet
+		charSets []charSet
 		str      string
 		wantErr  bool
 	}{
-		{"contains lower", []CharSet{LowerCaseChar}, "abc", false},
-		{"contains lower and number", []CharSet{LowerCaseChar, NumberChar}, "abc1", false},
-		{"contains only number", []CharSet{LowerCaseChar, NumberChar}, "123", false},
-		{"contains none", []CharSet{LowerCaseChar}, "123", true},
+		{"contains lower", []charSet{LowerCaseChar}, "abc", false},
+		{"contains lower and number", []charSet{LowerCaseChar, NumberChar}, "abc1", false},
+		{"contains only number", []charSet{LowerCaseChar, NumberChar}, "123", false},
+		{"contains none", []charSet{LowerCaseChar}, "123", true},
+		{"empty string", []charSet{LowerCaseChar}, "", true},
+		{"no charsets", []charSet{}, "abc", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -145,14 +157,16 @@ func TestContainsAny(t *testing.T) {
 func TestContainsAll(t *testing.T) {
 	tests := []struct {
 		name     string
-		charSets []CharSet
+		charSets []charSet
 		str      string
 		wantErr  bool
 	}{
-		{"contains lower and number", []CharSet{LowerCaseChar, NumberChar}, "abc1", false},
-		{"contains only lower", []CharSet{LowerCaseChar, NumberChar}, "abc", true},
-		{"contains only number", []CharSet{LowerCaseChar, NumberChar}, "123", true},
-		{"contains none", []CharSet{LowerCaseChar, NumberChar}, "ABC", true},
+		{"contains lower and number", []charSet{LowerCaseChar, NumberChar}, "abc1", false},
+		{"contains only lower", []charSet{LowerCaseChar, NumberChar}, "abc", true},
+		{"contains only number", []charSet{LowerCaseChar, NumberChar}, "123", true},
+		{"contains none", []charSet{LowerCaseChar, NumberChar}, "ABC", true},
+		{"empty string", []charSet{LowerCaseChar, NumberChar}, "", true},
+		{"no charsets", []charSet{}, "abc", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -167,13 +181,15 @@ func TestContainsAll(t *testing.T) {
 func TestNotContains(t *testing.T) {
 	tests := []struct {
 		name     string
-		charSets []CharSet
+		charSets []charSet
 		str      string
 		wantErr  bool
 	}{
-		{"contains lower", []CharSet{LowerCaseChar}, "abc", true},
-		{"contains number", []CharSet{NumberChar}, "abc1", true},
-		{"does not contain special", []CharSet{SpecialChar}, "abc1", false},
+		{"contains lower", []charSet{LowerCaseChar}, "abc", true},
+		{"contains number", []charSet{NumberChar}, "abc1", true},
+		{"does not contain special", []charSet{SpecialChar}, "abc1", false},
+		{"empty string", []charSet{LowerCaseChar}, "", false},
+		{"no charsets", []charSet{}, "abc", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -192,31 +208,49 @@ func TestMatch(t *testing.T) {
 		str     string
 		wantErr bool
 	}{
-		{"match", "a.*c", "abc", true},
-		{"match", "a.*c", "adefbc", true},
-		{"no match", "a.*c", "abd", true},
-		{"match with ?", "a?c", "ac", true},
-		{"no match with ?", "a?c", "abc", false},
-		{"no match with *", "a*c", "addddadaadc", false},
+		{"match", "a*c", "abc", false},
+		{"match", "a*c", "adefbc", false},
+		{"no match", "a*c", "abd", true},
+		{"match with ?", "a?c", "abc", false},
+		{"no match with ?", "a?c", "ac", true},
+		{"match with * at end", "a*", "addddadaad", false},
+		{"empty str", "a*", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, v := Match(tt.pattern)()
-			if err := v(tt.str); (err != nil) != tt.wantErr {
-				t.Errorf("Match() error = %v, wantErr %v", err, tt.wantErr)
+			_, f := Match(tt.pattern)()
+			if err := f(tt.str); (err != nil) != tt.wantErr {
+				t.Errorf("Match() for pattern '%s' and string '%s' error = %v, wantErr %v", tt.pattern, tt.str, err, tt.wantErr)
 			}
 		})
 	}
 }
 
 func TestMatch_PanicOnInvalidPattern(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic but was expected to")
-		}
-	}()
-	// This call should panic because the regex pattern is invalid.
-	_ = Match("[")
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{
+			name:    "invalid regex pattern",
+			pattern: "[",
+		},
+		{
+			name:    "empty pattern",
+			pattern: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("The code did not panic but was expected to")
+				}
+			}()
+			_ = Match(tc.pattern)
+		})
+	}
 }
 
 func TestEmail(t *testing.T) {
@@ -228,6 +262,7 @@ func TestEmail(t *testing.T) {
 		{"valid email", "test@example.com", false},
 		{"valid with subdomain", "test@mail.example.com", false},
 		{"valid with plus alias", "test+alias@example.com", false},
+		{"valid with display name", `'"John Doe" <test@example.com>'`, true},
 		{"invalid email", "test", true},
 		{"invalid email", "test@", true},
 		{"@example.com", "@example.com", true},
@@ -255,6 +290,7 @@ func TestURL(t *testing.T) {
 		{"valid url with path https", "https://example.com/path", false},
 		{"valid url with port", "http://example.com:8080", false},
 		{"valid url with query", "https://example.com?a=1&b=2", false},
+		{"valid url with fragment", "http://example.com/path#section", false},
 		{"valid ftp url", "ftp://example.com", false},
 		{"invalid url01", "example.com", true},
 		{"invalid url02", "http://", true},
@@ -304,6 +340,7 @@ func TestOneOf(t *testing.T) {
 		}{
 			{"is one of", []int{1, 2, 3}, 2, false},
 			{"is not one of", []int{1, 2, 3}, 4, true},
+			{"empty allowed", []int{}, 1, true},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -562,7 +599,7 @@ func TestGt(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
-					t.Errorf("Gt[uint64]() error = %v, wantErr %v", err, tt.wantErr)
+					t.Errorf("Gt[int]() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			})
 		}
@@ -616,8 +653,8 @@ func TestGte(t *testing.T) {
 	t.Run("int64", func(t *testing.T) {
 		tests := []struct {
 			name    string
-			limit   int64
-			value   int64
+			limit   int
+			value   int
 			wantErr bool
 		}{
 			{"value is greater", 5, 6, false},
@@ -820,7 +857,7 @@ func TestLt(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
-					t.Errorf("Lt[uint8]() error = %v, wantErr %v", err, tt.wantErr)
+					t.Errorf("Lt[time.Time]() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			})
 		}

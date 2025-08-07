@@ -16,7 +16,7 @@ import (
 // A private type to prevent key collisions in context.
 type viewObjectKeyType struct{}
 
-// ViewObjectKey is the key used to store the validated dataObject map in the request context.
+// ViewObjectKey is the key used to store the validated valueObject map in the request context.
 var ViewObjectKey = viewObjectKeyType{}
 
 // validationError is a custom error type that holds a map of validation errors,
@@ -292,24 +292,24 @@ type ValueObject interface {
 	seal()
 }
 
-// dataObject is the private, concrete implementation of the ValueObject interface.
-type dataObject map[string]any
+// valueObject is the private, concrete implementation of the ValueObject interface.
+type valueObject map[string]any
 
-func (do dataObject) Set(name string, value any) {
-	_, ok := do[name]
+func (vo valueObject) Set(name string, value any) {
+	_, ok := vo[name]
 	lo.Assertf(ok, "property %s exists, can not overwrite it", name)
-	do[name] = value
+	vo[name] = value
 }
 
-var _ ValueObject = (*dataObject)(nil)
+var _ ValueObject = (*valueObject)(nil)
 
 // seal is an empty method to satisfy the sealed ValueObject interface.
-func (do dataObject) seal() {}
+func (vo valueObject) seal() {}
 
 // get is a generic helper to retrieve a value and assert its type.
 // It returns an Option, which will be empty if the key was not present.
 // It panics if the key exists but the type is incorrect.
-func get[T any](d dataObject, name string) mo.Option[T] {
+func get[T any](d valueObject, name string) mo.Option[T] {
 	value, ok := d[name]
 	if !ok {
 		return mo.None[T]()
@@ -323,49 +323,49 @@ func get[T any](d dataObject, name string) mo.Option[T] {
 
 // String returns an Option containing the string value for the given name.
 // It panics if the field exists but is not a string.
-func (do dataObject) String(name string) mo.Option[string] {
-	return get[string](do, name)
+func (vo valueObject) String(name string) mo.Option[string] {
+	return get[string](vo, name)
 }
 
 // Int returns an Option containing the int value for the given name.
 // It panics if the field exists but is not an int.
-func (do dataObject) Int(name string) mo.Option[int] {
-	return get[int](do, name)
+func (vo valueObject) Int(name string) mo.Option[int] {
+	return get[int](vo, name)
 }
 
 // Int64 returns an Option containing the int64 value for the given name.
 // It panics if the field exists but is not an int64.
-func (do dataObject) Int64(name string) mo.Option[int64] {
-	return get[int64](do, name)
+func (vo valueObject) Int64(name string) mo.Option[int64] {
+	return get[int64](vo, name)
 }
 
 // Float returns an Option containing the float64 value for the given name.
 // It panics if the field exists but is not a float64.
-func (do dataObject) Float(name string) mo.Option[float64] {
-	return get[float64](do, name)
+func (vo valueObject) Float(name string) mo.Option[float64] {
+	return get[float64](vo, name)
 }
 
 // Float32 returns an Option containing the float32 value for the given name.
 // It panics if the field exists but is not a float32.
-func (do dataObject) Float32(name string) mo.Option[float32] {
-	return get[float32](do, name)
+func (vo valueObject) Float32(name string) mo.Option[float32] {
+	return get[float32](vo, name)
 }
 
 // Bool returns an Option containing the bool value for the given name.
 // It panics if the field exists but is not a bool.
-func (do dataObject) Bool(name string) mo.Option[bool] {
-	return get[bool](do, name)
+func (vo valueObject) Bool(name string) mo.Option[bool] {
+	return get[bool](vo, name)
 }
 
 // Time returns an Option containing the time.Time value for the given name.
 // It panics if the field exists but is not a time.Time.
-func (do dataObject) Time(name string) mo.Option[time.Time] {
-	return get[time.Time](do, name)
+func (vo valueObject) Time(name string) mo.Option[time.Time] {
+	return get[time.Time](vo, name)
 }
 
 func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 	errs := &validationError{}
-	object := dataObject{}
+	object := valueObject{}
 	// Check for unknown fields first if not allowed.
 	if !vo.allowUnknownFields {
 		knownFields := make(map[string]struct{}, len(vo.fields))

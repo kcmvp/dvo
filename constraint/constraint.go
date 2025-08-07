@@ -3,19 +3,32 @@ package constraint
 import (
 	"errors"
 	"fmt"
-	"github.com/tidwall/match"
 	"net/mail"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/tidwall/match"
+
 	"github.com/samber/lo"
 )
 
-type CharSet int
+type charSet int
+
+type Number interface {
+	uint | uint8 | uint16 | uint32 | uint64 | int | int8 | int16 | int32 | int64 | float32 | float64
+}
+
+// JSONType is a constraint for the actual Go types we want to validate.
+type JSONType interface {
+	Number | string | time.Time | bool
+}
+
+type Validator[T JSONType] func(v T) error
+type ValidateFunc[T JSONType] func() (string, Validator[T])
 
 const (
-	LowerCaseChar CharSet = iota
+	LowerCaseChar charSet = iota
 	UpperCaseChar
 	NumberChar
 	SpecialChar
@@ -52,11 +65,11 @@ var (
 	ErrMustLte             = errors.New("must be less than or equal to")
 	ErrMustBetween         = errors.New("must be between")
 	ErrMustBeTrue          = errors.New("must be true")
-	ErrMustBeFalse         = errors.New("must be true")
+	ErrMustBeFalse         = errors.New("must be false")
 )
 
 // value is a private helper to get the character set and its descriptive name.
-func (set CharSet) value() (chars string, name string) {
+func (set charSet) value() (chars string, name string) {
 	switch set {
 	case LowerCaseChar:
 		return LowerCaseCharSet, "lower case letters"
@@ -67,7 +80,7 @@ func (set CharSet) value() (chars string, name string) {
 	case SpecialChar:
 		return SpecialCharSet, "special characters"
 	default:
-		panic("unhandled default case in CharSet.value()")
+		panic("unhandled default case in charSet.value()")
 	}
 }
 
@@ -124,7 +137,7 @@ func LengthBetween(min, max int) ValidateFunc[string] {
 }
 
 // OnlyContains validates that a string only contains characters from the specified character sets.
-func OnlyContains(charSets ...CharSet) ValidateFunc[string] {
+func OnlyContains(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "only_contains", func(str string) error {
 			var allChars strings.Builder
@@ -145,7 +158,7 @@ func OnlyContains(charSets ...CharSet) ValidateFunc[string] {
 }
 
 // ContainsAny validates that a string contains at least one character from any of the specified character sets.
-func ContainsAny(charSets ...CharSet) ValidateFunc[string] {
+func ContainsAny(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "contains_any", func(str string) error {
 			var allChars strings.Builder
@@ -164,7 +177,7 @@ func ContainsAny(charSets ...CharSet) ValidateFunc[string] {
 }
 
 // ContainsAll validates that a string contains at least one character from each of the specified character sets.
-func ContainsAll(charSets ...CharSet) ValidateFunc[string] {
+func ContainsAll(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "contains_all", func(str string) error {
 			for _, set := range charSets {
@@ -180,7 +193,7 @@ func ContainsAll(charSets ...CharSet) ValidateFunc[string] {
 }
 
 // NotContains validates that a string does not contain any characters from the specified character sets.
-func NotContains(charSets ...CharSet) ValidateFunc[string] {
+func NotContains(charSets ...charSet) ValidateFunc[string] {
 	return func() (string, Validator[string]) {
 		return "not_contains", func(str string) error {
 			for _, set := range charSets {
@@ -201,7 +214,7 @@ func NotContains(charSets ...CharSet) ValidateFunc[string] {
 //
 // Example: Match("foo*") will match "foobar", "foo", etc.
 func Match(pattern string) ValidateFunc[string] {
-	lo.Assertf(match.IsPattern(pattern), "invalid match pattern : %s(`?` stands for one character, `*` stands for any number of characters)", pattern)
+	lo.Assertf(match.IsPattern(pattern), "invalid pattern `%s`: `?` stands for one character, `*` stands for any number of characters", pattern)
 	return func() (string, Validator[string]) {
 		return "match", func(str string) error {
 			if !match.Match(str, pattern) {

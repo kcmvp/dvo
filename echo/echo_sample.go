@@ -3,12 +3,13 @@
 package main
 
 import (
+	"log"
+	"net/http"
+
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/constraint"
 	"github.com/kcmvp/dvo/echo/middelware"
 	"github.com/labstack/echo/v4"
-	"log"
-	"net/http"
 )
 
 // In a real-world application, the ValueObject definitions below would typically
@@ -19,6 +20,7 @@ var loginVO = dvo.WithFields(
 	dvo.Field[string]("username", constraint.Email())(),
 	dvo.Field[string]("password", constraint.Match("*abc"))(),
 	dvo.Field[bool]("rememberMe", constraint.BeTrue())(),
+	dvo.Field[string]("testing", constraint.ContainsAll(constraint.LowerCaseChar))(),
 ).AllowUnknownFields()
 
 // loginHandler is the main business logic handler.
