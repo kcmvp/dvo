@@ -1,0 +1,8 @@
+{
+  "OrderID": "ORD-12345",
+  "CustomerID": "CUST-67890",
+  "OrderDate": "2023-10-27T10:00:00Z",
+  "Amount": 150.75,
+  "Priority": 2,
+  "Shipped": false
+}

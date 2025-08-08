@@ -1,4 +1,4 @@
-package middelware
+package middleware
 
 import (
 	"context"
@@ -8,19 +8,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
+	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
 )
 
-// Enrich defines a function type for enriching the validated data.
-type Enrich func(*gin.Context) map[string]any
+// EnrichFunc defines a function type for enriching the validated data.
+type EnrichFunc func(*gin.Context) map[string]any
 
-var _enrich Enrich
+var _enrich EnrichFunc
 var once sync.Once
 
-// EnrichViewWith sets a function to be called for enriching the validated data
+// SetGlobalEnricher sets a function to be called for enriching the validated data
 // when validation is successful. This function is set only once.
-func EnrichViewWith(enrich Enrich) {
+func SetGlobalEnricher(enrich EnrichFunc) {
 	once.Do(func() {
 		_enrich = enrich
 	})
@@ -29,7 +30,7 @@ func EnrichViewWith(enrich Enrich) {
 // Bind creates a Gin middleware that validates the request body against a dvo.ViewObject.
 // If validation is successful, the validated data is stored in the request context.
 // If validation fails, it aborts the request with a 400 Bad Request status and an error message.
-// It also allows for enriching the validated data using a previously set Enrich function.
+// It also allows for enriching the validated data using a previously set EnrichFunc function.
 func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get a fresh ValueObject instance for this request.
@@ -51,6 +52,8 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 		data := result.MustGet()
 		if _enrich != nil {
 			for k, v := range _enrich(c) {
+				op := data.Get(k)
+				lo.Assertf(op.IsPresent(), "property %s exiests", k)
 				data.Set(k, v)
 			}
 		}

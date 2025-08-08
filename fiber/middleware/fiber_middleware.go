@@ -6,23 +6,24 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kcmvp/dvo"
+	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 )
 
-// Enrich is a function type that can be used to enrich the validated data
+// EnrichFunc is a function type that can be used to enrich the validated data
 // with additional information from the Fiber context.
 // It takes a Fiber context as input and returns a map of string to any,
 // which will be merged into the validated data. This function is executed only once.
-type Enrich func(c fiber.Ctx) map[string]any
+type EnrichFunc func(c fiber.Ctx) map[string]any
 
-var _enrich Enrich
+var _enrich EnrichFunc
 var once sync.Once
 
-// EnrichViewWith sets a function to enrich the validated data.
+// SetGlobalEnricher sets a function to enrich the validated data.
 // This function is executed only once, typically during application startup.
 // The provided `enrich` function will be called after successful validation
 // to add additional information to the data object.
-func EnrichViewWith(enrich Enrich) {
+func SetGlobalEnricher(enrich EnrichFunc) {
 	once.Do(func() {
 		_enrich = enrich
 	})
@@ -47,6 +48,8 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 		data := result.MustGet()
 		if _enrich != nil {
 			for k, v := range _enrich(c) {
+				op := data.Get(k)
+				lo.Assertf(op.IsPresent(), "property %s exiests", k)
 				data.Set(k, v)
 			}
 		}

@@ -288,24 +288,6 @@ func Between[T Number | time.Time](min, max T) ValidateFunc[T] {
 	}
 }
 
-// Min validates that a number or time.Time is greater than or equal to a minimum value.
-func Min[T Number | time.Time](min T) ValidateFunc[T] {
-	return func() (string, Validator[T]) {
-		return "min_number_date", func(val T) error {
-			return lo.Ternary(isLessThan(val, min), fmt.Errorf("%w %v", ErrMin, min), nil)
-		}
-	}
-}
-
-// Max validates that a number or time.Time is less than or equal to a maximum value.
-func Max[T Number | time.Time](max T) ValidateFunc[T] {
-	return func() (string, Validator[T]) {
-		return "max_number_date", func(val T) error {
-			return lo.Ternary(isGreaterThan(val, max), fmt.Errorf("%w %v", ErrMax, max), nil)
-		}
-	}
-}
-
 // --- Boolean Validators ---
 
 // BeTrue validates that a boolean value is true.
