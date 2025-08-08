@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kcmvp/dvo"
+	"github.com/kcmvp/dvo/internal"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -82,7 +83,7 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 			// Store the validated and enriched ValueObject in the request's context
 			// for downstream handlers to access using the dvo.ViewObjectKey.
 			req := c.Request()
-			ctx := context.WithValue(req.Context(), dvo.ViewObjectKey, data)
+			ctx := context.WithValue(req.Context(), internal.ViewObjectKey, data)
 			c.SetRequest(req.WithContext(ctx))
 
 			// Proceed to the next middleware or the main handler in the chain.
@@ -98,7 +99,7 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 // happen if the middleware was not used for the route.
 func ValueObject(c echo.Context) dvo.ValueObject {
 	// Retrieve the value from the request's context using the predefined key.
-	if val := c.Request().Context().Value(dvo.ViewObjectKey); val != nil {
+	if val := c.Request().Context().Value(internal.ViewObjectKey); val != nil {
 		// Perform a type assertion to ensure the value is of the expected type.
 		if vo, ok := val.(dvo.ValueObject); ok {
 			return vo

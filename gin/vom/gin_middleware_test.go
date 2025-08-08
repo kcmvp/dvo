@@ -1,14 +1,14 @@
 package vom
 
 import (
-	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gofiber/fiber/v3"
+	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/constraint"
 	"github.com/stretchr/testify/assert"
@@ -25,24 +25,25 @@ var orderVO = dvo.WithFields(
 	dvo.Field[bool]("Shipped")(),
 )
 
-// orderHandler retrieves the validated view object from the context and returns it.
-func orderHandler(c fiber.Ctx) error {
-	vo := ValueObject(c)
-	if vo == nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "can not find viewObject"})
-	}
-	return c.JSON(vo)
+func setupRouter() *gin.Engine {
+	router := gin.Default()
+	router.POST("/neworder", Bind(orderVO), orderHandler)
+	return router
 }
 
-func setupRouter() *fiber.App {
-	app := fiber.New()
-	app.Post("/neworder", Bind(orderVO), orderHandler)
-	return app
+// orderHandler retrieves the validated view object from the context and returns it.
+func orderHandler(c *gin.Context) {
+	vo := ValueObject(c)
+	if vo == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+	c.JSON(http.StatusOK, vo)
 }
 
 func TestDynamicVOBinding(t *testing.T) {
 
-	app := setupRouter()
+	router := setupRouter()
 
 	testCases := []struct {
 		name           string
@@ -83,17 +84,39 @@ func TestDynamicVOBinding(t *testing.T) {
 			require.NoError(t, err)
 			payload := string(payloadBytes)
 
+			rec := httptest.NewRecorder()
 			req, _ := http.NewRequest("POST", "/neworder", strings.NewReader(payload))
-			// Perform the request using app.Test
-			res, err := app.Test(req)
+
+			router.ServeHTTP(rec, req)
 			// 4. Validate the outcome.
-			assert.Equal(t, tc.expectedStatus, res.StatusCode)
+			assert.Equal(t, tc.expectedStatus, rec.Code)
 			// For the successful case, also verify the content of the response.
 			if tc.expectedStatus == http.StatusOK {
 				// The handler returns the validated object, so the response should match the input.
-				body, _ := io.ReadAll(res.Body)
-				assert.JSONEq(t, payload, string(body))
+				assert.JSONEq(t, payload, rec.Body.String())
 			}
 		})
 	}
+}
+
+func TestSetGlobalEnricher(t *testing.T) {
+
+	// Define two different enricher functions.
+	firstEnricher := func(c *gin.Context) map[string]any {
+		return map[string]any{
+			"id": "1",
+		}
+	}
+	secondEnricher := func(c *gin.Context) map[string]any {
+		return map[string]any{
+			"id": "2",
+		}
+	}
+
+	// Call SetGlobalEnricher twice. The sync.Once should ignore the second call.
+	SetGlobalEnricher(firstEnricher)
+	SetGlobalEnricher(secondEnricher)
+	v1, _ := firstEnricher(nil)["id"]
+	v2, _ := _enrich(nil)["id"]
+	assert.True(t, v1 == v2)
 }

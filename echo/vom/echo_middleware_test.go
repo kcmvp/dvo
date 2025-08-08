@@ -91,3 +91,25 @@ func TestDynamicVOBinding(t *testing.T) {
 		})
 	}
 }
+
+func TestSetGlobalEnricher(t *testing.T) {
+
+	// Define two different enricher functions.
+	firstEnricher := func(c echo.Context) map[string]any {
+		return map[string]any{
+			"id": "1",
+		}
+	}
+	secondEnricher := func(c echo.Context) map[string]any {
+		return map[string]any{
+			"id": "2",
+		}
+	}
+
+	// Call SetGlobalEnricher twice. The sync.Once should ignore the second call.
+	SetGlobalEnricher(firstEnricher)
+	SetGlobalEnricher(secondEnricher)
+	v1, _ := firstEnricher(nil)["id"]
+	v2, _ := _enrich(nil)["id"]
+	assert.True(t, v1 == v2)
+}

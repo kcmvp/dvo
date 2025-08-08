@@ -13,12 +13,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// A private type to prevent key collisions in context.
-type viewObjectKeyType struct{}
-
-// ViewObjectKey is the key used to store the validated valueObject map in the request context.
-var ViewObjectKey = viewObjectKeyType{}
-
 // validationError is a custom error type that holds a map of validation errors,
 // ensuring that there is only one error per field.
 type validationError struct {
@@ -238,9 +232,9 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, zero, res.Type))
 }
 
-type FF[T constraint.JSONType] func(...constraint.ValidateFunc[T]) *ViewField[T]
+type FieldBuilder[T constraint.JSONType] func(...constraint.ValidateFunc[T]) *ViewField[T]
 
-func Field[T constraint.JSONType](name string, vfs ...constraint.ValidateFunc[T]) FF[T] {
+func Field[T constraint.JSONType](name string, vfs ...constraint.ValidateFunc[T]) FieldBuilder[T] {
 	return func(fs ...constraint.ValidateFunc[T]) *ViewField[T] {
 		afs := append(vfs, fs...)
 		names := make(map[string]struct{})

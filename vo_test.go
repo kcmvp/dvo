@@ -1,8 +1,10 @@
 package dvo
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -1080,4 +1082,48 @@ func TestEndToEnd(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValueObject_GetSet(t *testing.T) {
+	vo := make(valueObject)
+
+	// 1. Test Set and Get for a new value
+	vo.Set("name", "gopher")
+	nameOpt := vo.Get("name")
+	require.True(t, nameOpt.IsPresent(), "expected 'name' to be present")
+	name, ok := nameOpt.Get()
+	require.True(t, ok)
+	require.Equal(t, "gopher", name)
+
+	// 2. Test Get for a non-existent value
+	ageOpt := vo.Get("age")
+	require.False(t, ageOpt.IsPresent(), "expected 'age' to be absent")
+
+	// 3. Test Set to overwrite an existing value
+	vo.Set("name", "gopher-overwritten")
+	newNameOpt := vo.Get("name")
+	require.True(t, newNameOpt.IsPresent(), "expected 'name' to be present after overwrite")
+	newName, ok := newNameOpt.Get()
+	require.True(t, ok)
+	require.Equal(t, "gopher-overwritten", newName)
+}
+
+func TestValueObject_Set_LogsOnOverwrite(t *testing.T) {
+	// 1. Setup a buffer to capture log output
+	var logBuf bytes.Buffer
+	handler := slog.NewTextHandler(&logBuf, nil)
+	logger := slog.New(handler)
+	originalLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(originalLogger)
+
+	// 2. Create a valueObject and trigger the overwrite
+	vo := make(valueObject)
+	vo.Set("name", "gopher")
+	vo.Set("name", "gopher-overwritten") // This should log
+
+	// 3. Assert the log output
+	logOutput := logBuf.String()
+	require.Contains(t, logOutput, "overwrite existing property", "log should contain overwrite message")
+	require.Contains(t, logOutput, "property=name", "log should contain the property name")
 }
