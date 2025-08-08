@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
+	"github.com/kcmvp/dvo/internal"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
@@ -58,7 +59,7 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 			}
 		}
 		// Store the validated object in the request's context for the main handler to use.
-		ctx := context.WithValue(c.Request.Context(), dvo.ViewObjectKey, data)
+		ctx := context.WithValue(c.Request.Context(), internal.ViewObjectKey, data)
 		c.Request = c.Request.WithContext(ctx)
 		// Proceed to the next handler.
 		c.Next()
@@ -68,7 +69,7 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 // ValueObject retrieves the validated ViewObject from the gin context.
 // It returns nil if the object is not found.
 func ValueObject(c *gin.Context) dvo.ValueObject {
-	if val := c.Request.Context().Value(dvo.ViewObjectKey); val != nil {
+	if val := c.Request.Context().Value(internal.ViewObjectKey); val != nil {
 		if vo, ok := val.(dvo.ValueObject); ok {
 			return vo
 		}

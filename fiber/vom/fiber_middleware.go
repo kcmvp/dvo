@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kcmvp/dvo"
+	"github.com/kcmvp/dvo/internal"
 	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 )
@@ -54,7 +55,7 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 			}
 		}
 		// Store the validated object in the context for the main handler to use.
-		c.Locals(dvo.ViewObjectKey, data)
+		c.Locals(internal.ViewObjectKey, data)
 		return c.Next()
 	}
 }
@@ -62,7 +63,7 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 // ValueObject retrieves the validated ViewObject from the fiber context.
 // It returns nil if the object is not found.
 func ValueObject(c fiber.Ctx) dvo.ValueObject {
-	if val := c.Locals(dvo.ViewObjectKey); val != nil {
+	if val := c.Locals(internal.ViewObjectKey); val != nil {
 		if vo, ok := val.(dvo.ValueObject); ok {
 			return vo
 		}

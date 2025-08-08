@@ -1,14 +1,14 @@
 package vom
 
 import (
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/constraint"
 	"github.com/stretchr/testify/assert"
@@ -25,25 +25,24 @@ var orderVO = dvo.WithFields(
 	dvo.Field[bool]("Shipped")(),
 )
 
-func setupRouter() *gin.Engine {
-	router := gin.Default()
-	router.POST("/neworder", Bind(orderVO), orderHandler)
-	return router
-}
-
 // orderHandler retrieves the validated view object from the context and returns it.
-func orderHandler(c *gin.Context) {
+func orderHandler(c fiber.Ctx) error {
 	vo := ValueObject(c)
 	if vo == nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "can not find viewObject"})
 	}
-	c.JSON(http.StatusOK, vo)
+	return c.JSON(vo)
+}
+
+func setupRouter() *fiber.App {
+	app := fiber.New()
+	app.Post("/neworder", Bind(orderVO), orderHandler)
+	return app
 }
 
 func TestDynamicVOBinding(t *testing.T) {
 
-	router := setupRouter()
+	app := setupRouter()
 
 	testCases := []struct {
 		name           string
@@ -84,17 +83,39 @@ func TestDynamicVOBinding(t *testing.T) {
 			require.NoError(t, err)
 			payload := string(payloadBytes)
 
-			rec := httptest.NewRecorder()
 			req, _ := http.NewRequest("POST", "/neworder", strings.NewReader(payload))
-
-			router.ServeHTTP(rec, req)
+			// Perform the request using app.Test
+			res, err := app.Test(req)
 			// 4. Validate the outcome.
-			assert.Equal(t, tc.expectedStatus, rec.Code)
+			assert.Equal(t, tc.expectedStatus, res.StatusCode)
 			// For the successful case, also verify the content of the response.
 			if tc.expectedStatus == http.StatusOK {
 				// The handler returns the validated object, so the response should match the input.
-				assert.JSONEq(t, payload, rec.Body.String())
+				body, _ := io.ReadAll(res.Body)
+				assert.JSONEq(t, payload, string(body))
 			}
 		})
 	}
+}
+
+func TestSetGlobalEnricher(t *testing.T) {
+
+	// Define two different enricher functions.
+	firstEnricher := func(c fiber.Ctx) map[string]any {
+		return map[string]any{
+			"id": "1",
+		}
+	}
+	secondEnricher := func(c fiber.Ctx) map[string]any {
+		return map[string]any{
+			"id": "2",
+		}
+	}
+
+	// Call SetGlobalEnricher twice. The sync.Once should ignore the second call.
+	SetGlobalEnricher(firstEnricher)
+	SetGlobalEnricher(secondEnricher)
+	v1, _ := firstEnricher(nil)["id"]
+	v2, _ := _enrich(nil)["id"]
+	assert.True(t, v1 == v2)
 }
