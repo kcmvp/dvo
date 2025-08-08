@@ -2,8 +2,8 @@ package dvo
 
 import (
 	"fmt"
-	"math"
 	"math/big"
+	"reflect"
 	"strings"
 	"time"
 
@@ -126,18 +126,9 @@ func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
 	return mo.Ok(val), true
 }
 
-// checkBounds is a helper to check if a big.Float is within the given int64 min/max boundaries.
-func checkBounds(bf *big.Float, min, max int64) bool {
-	maxV := new(big.Float).SetInt64(max)
-	minV := new(big.Float).SetInt64(min)
-	return bf.Cmp(maxV) > 0 || bf.Cmp(minV) < 0
-}
-
-// checkBoundsUint is a helper to check if a big.Float is within the given uint64 max boundary.
-func checkBoundsUint(bf *big.Float, max uint64) bool {
-	maxV := new(big.Float).SetUint64(max)
-	minV := new(big.Float).SetUint64(0)
-	return bf.Cmp(maxV) > 0 || bf.Cmp(minV) < 0
+// overflowError creates a standard error for integer overflow.
+func overflowError[T any](v T) error {
+	return fmt.Errorf("for type %T: %w", v, constraint.ErrIntegerOverflow)
 }
 
 // typed attempts to convert a gjson.Result into the specified JSONType.
@@ -146,63 +137,20 @@ func checkBoundsUint(bf *big.Float, max uint64) bool {
 // the expected Go type.
 func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 	var zero T
-	switch tt := any(zero).(type) {
-	case string:
+	targetType := reflect.TypeOf(zero)
+
+	switch targetType.Kind() {
+	case reflect.String:
 		if res.Type == gjson.String {
 			return mo.Ok(any(res.String()).(T))
 		}
-	case bool:
+	case reflect.Bool:
 		if res.Type == gjson.True || res.Type == gjson.False {
 			return mo.Ok(any(res.Bool()).(T))
 		}
-	case int, int8, int16, int32, int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, tt, res.Type))
-		}
-
-		// Use big.Float64 for arbitrary-precision parsing to avoid float64 precision loss.
-		bf, _, err := new(big.Float).Parse(res.Raw, 10)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse number: %w", err))
-		}
-
-		// Check if the number is a whole number.
-		if !bf.IsInt() {
-			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
-		}
-
-		// Check for overflow against the specific integer type and convert.
-		val, _ := bf.Int64()
-		switch any(zero).(type) {
-		case int:
-			if checkBounds(bf, math.MinInt, math.MaxInt) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(int(val)).(T))
-		case int8:
-			if checkBounds(bf, math.MinInt8, math.MaxInt8) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(int8(val)).(T))
-		case int16:
-			if checkBounds(bf, math.MinInt16, math.MaxInt16) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(int16(val)).(T))
-		case int32:
-			if checkBounds(bf, math.MinInt32, math.MaxInt32) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(int32(val)).(T))
-		case int64:
-			if checkBounds(bf, math.MinInt64, math.MaxInt64) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(val).(T))
-		}
-	case uint, uint8, uint16, uint32, uint64:
-		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, tt, res.Type))
+			break // Fall through to the default error at the end.
 		}
 		bf, _, err := new(big.Float).Parse(res.Raw, 10)
 		if err != nil {
@@ -211,67 +159,82 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 		if !bf.IsInt() {
 			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
 		}
-		val, _ := bf.Uint64()
-		switch any(zero).(type) {
-		case uint:
-			if checkBoundsUint(bf, uint64(^uint(0))) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(uint(val)).(T))
-		case uint8:
-			if checkBoundsUint(bf, math.MaxUint8) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(uint8(val)).(T))
-		case uint16:
-			if checkBoundsUint(bf, math.MaxUint16) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(uint16(val)).(T))
-		case uint32:
-			if checkBoundsUint(bf, math.MaxUint32) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(uint32(val)).(T))
-		case uint64:
-			if checkBoundsUint(bf, math.MaxUint64) {
-				return mo.Err[T](fmt.Errorf("for type %T: %w", tt, constraint.ErrIntegerOverflow))
-			}
-			return mo.Ok(any(val).(T))
+		// Convert to big.Int to safely check bounds.
+		bi, _ := bf.Int(nil)
+		// Check if the big.Int value fits into a standard int64.
+		if !bi.IsInt64() {
+			return mo.Err[T](overflowError(zero))
 		}
-	case float32, float64:
+		val := bi.Int64()
+		// Now check if the int64 value overflows the specific target type (e.g., int8, int16).
+		if reflect.New(targetType).Elem().OverflowInt(val) {
+			return mo.Err[T](overflowError(zero))
+		}
+		return mo.Ok(any(reflect.ValueOf(val).Convert(targetType).Interface()).(T))
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		if res.Type != gjson.Number {
-			return mo.Err[T](fmt.Errorf("%w: expected number but got JSON type %s", constraint.ErrTypeMismatch, res.Type))
+			break
 		}
-		val := res.Float() // This is float64
-		switch any(zero).(type) {
-		case float32:
-			if val > math.MaxFloat32 || val < -math.MaxFloat32 {
-				return mo.Err[T](fmt.Errorf("value %f overflows type float32", val))
-			}
-			return mo.Ok(any(float32(val)).(T))
-		case float64:
-			return mo.Ok(any(val).(T))
+		bf, _, err := new(big.Float).Parse(res.Raw, 10)
+		if err != nil {
+			return mo.Err[T](fmt.Errorf("could not parse number: %w", err))
 		}
-	case time.Time:
-		if res.Type == gjson.String {
-			dateStr := res.String()
-			// List of layouts to try, from most to least specific.
-			layouts := []string{
-				time.RFC3339Nano,
-				time.RFC3339,
-				"2006-01-02T15:04:05", // Local time without timezone
-				"2006-01-02",          // Date only
-			}
-			for _, layout := range layouts {
-				if t, err := time.Parse(layout, dateStr); err == nil {
-					return mo.Ok(any(t).(T))
+		// Check for negative numbers, which is an overflow for unsigned types.
+		if bf.Sign() < 0 {
+			return mo.Err[T](overflowError(zero))
+		}
+		if !bf.IsInt() {
+			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to unsigned integer type", constraint.ErrTypeMismatch, res.Raw))
+		}
+		// Convert to big.Int to safely check bounds.
+		bi, _ := bf.Int(nil)
+		// Check if the big.Int value fits into a standard uint64.
+		if !bi.IsUint64() {
+			return mo.Err[T](overflowError(zero))
+		}
+		val := bi.Uint64()
+		// Now check if the uint64 value overflows the specific target type (e.g., uint8, uint16).
+		if reflect.New(targetType).Elem().OverflowUint(val) {
+			return mo.Err[T](overflowError(zero))
+		}
+		return mo.Ok(any(reflect.ValueOf(val).Convert(targetType).Interface()).(T))
+
+	case reflect.Float32, reflect.Float64:
+		if res.Type != gjson.Number {
+			break
+		}
+		val := res.Float()
+		if reflect.New(targetType).Elem().OverflowFloat(val) {
+			return mo.Err[T](fmt.Errorf("value %f overflows type %T", val, zero))
+		}
+		return mo.Ok(any(reflect.ValueOf(val).Convert(targetType).Interface()).(T))
+
+	case reflect.Struct:
+		if targetType == reflect.TypeOf(time.Time{}) {
+			if res.Type == gjson.String {
+				dateStr := res.String()
+				layouts := []string{
+					time.RFC3339Nano,
+					time.RFC3339,
+					"2006-01-02T15:04:05",
+					"2006-01-02",
 				}
+				for _, layout := range layouts {
+					if t, err := time.Parse(layout, dateStr); err == nil {
+						return mo.Ok(any(t).(T))
+					}
+				}
+				return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", res.String()))
 			}
-			// If no layout matched, return a specific error.
-			return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", res.String()))
+			break
 		}
+		fallthrough
+	default:
+		return mo.Err[T](fmt.Errorf("%w: unsupported type %T", constraint.ErrTypeMismatch, zero))
 	}
+
+	// Default error for unhandled or mismatched types.
 	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, zero, res.Type))
 }
 
