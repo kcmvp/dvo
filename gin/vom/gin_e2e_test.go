@@ -1,4 +1,4 @@
-package middleware
+package vom
 
 import (
 	"net/http"
@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/constraint"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,19 +25,26 @@ var orderVO = dvo.WithFields(
 	dvo.Field[bool]("Shipped")(),
 )
 
+func setupRouter() *gin.Engine {
+	router := gin.Default()
+	router.POST("/neworder", Bind(orderVO), orderHandler)
+	return router
+}
+
 // orderHandler retrieves the validated view object from the context and returns it.
-func orderHandler(c echo.Context) error {
+func orderHandler(c *gin.Context) {
 	vo := ValueObject(c)
 	if vo == nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Validated view object not found in context"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
 	}
-	return c.JSON(http.StatusOK, vo)
+	c.JSON(http.StatusOK, vo)
 }
 
 func TestDynamicVOBinding(t *testing.T) {
-	e := echo.New()
-	// 2. Bind the dynamic ViewObject to the endpoint using the middleware.
-	e.POST("/neworder", Bind(orderVO)(orderHandler))
+
+	router := setupRouter()
+
 	testCases := []struct {
 		name           string
 		inputFile      string
@@ -77,10 +84,10 @@ func TestDynamicVOBinding(t *testing.T) {
 			require.NoError(t, err)
 			payload := string(payloadBytes)
 
-			req := httptest.NewRequest(http.MethodPost, "/neworder", strings.NewReader(payload))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req)
+			req, _ := http.NewRequest("POST", "/neworder", strings.NewReader(payload))
+
+			router.ServeHTTP(rec, req)
 			// 4. Validate the outcome.
 			assert.Equal(t, tc.expectedStatus, rec.Code)
 			// For the successful case, also verify the content of the response.
