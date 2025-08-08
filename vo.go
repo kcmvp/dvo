@@ -2,13 +2,13 @@ package dvo
 
 import (
 	"fmt"
+	"log/slog"
 	"math/big"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/kcmvp/dvo/constraint"
-	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
 )
@@ -305,15 +305,23 @@ type ValueObject interface {
 	Bool(name string) mo.Option[bool]
 	Time(name string) mo.Option[time.Time]
 	Set(name string, value any)
+	Get(string) mo.Option[any]
 	seal()
 }
 
 // valueObject is the private, concrete implementation of the ValueObject interface.
 type valueObject map[string]any
 
+func (vo valueObject) Get(s string) mo.Option[any] {
+	v, ok := vo[s]
+	return mo.TupleToOption[any](v, ok)
+}
+
 func (vo valueObject) Set(name string, value any) {
 	_, ok := vo[name]
-	lo.Assertf(ok, "property %s exists, can not overwrite it", name)
+	if ok {
+		slog.Info("overwrite existing property", "property", name)
+	}
 	vo[name] = value
 }
 
