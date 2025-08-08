@@ -20,6 +20,7 @@ func TestMinLength(t *testing.T) {
 		{"negative min", -1, "abc", false},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := MinLength(tt.min)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -45,6 +46,7 @@ func TestMaxLength(t *testing.T) {
 		{"negative max", -1, "", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := MaxLength(tt.max)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -69,6 +71,7 @@ func TestExactLength(t *testing.T) {
 		{"negative length", -1, "a", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := ExactLength(tt.len)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -98,6 +101,7 @@ func TestLengthBetween(t *testing.T) {
 		{"min > max again", 10, 8, "123456789", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := LengthBetween(tt.min, tt.max)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -121,6 +125,7 @@ func TestCharSetOnly(t *testing.T) {
 		{"no charsets", []charSet{}, "abc", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := CharSetOnly(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -145,6 +150,7 @@ func TestCharSetAny(t *testing.T) {
 		{"no charsets", []charSet{}, "abc", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := CharSetAny(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -169,6 +175,7 @@ func TestCharSetAll(t *testing.T) {
 		{"no charsets", []charSet{}, "abc", false},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := CharSetAll(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -192,6 +199,7 @@ func TestCharSetNo(t *testing.T) {
 		{"no charsets", []charSet{}, "abc", false},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := CharSetNo(tt.charSets...)()
 			if err := v(tt.str); (err != nil) != tt.wantErr {
@@ -217,6 +225,7 @@ func TestMatch(t *testing.T) {
 		{"empty str", "a*", "", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, f := Match(tt.pattern)()
 			if err := f(tt.str); (err != nil) != tt.wantErr {
@@ -242,6 +251,7 @@ func TestMatch_PanicOnInvalidPattern(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			defer func() {
 				if r := recover(); r == nil {
@@ -262,7 +272,7 @@ func TestEmail(t *testing.T) {
 		{"valid email", "test@example.com", false},
 		{"valid with subdomain", "test@mail.example.com", false},
 		{"valid with plus alias", "test+alias@example.com", false},
-		{"valid with display name", `''"John Doe" <test@example.com>'`, true},
+		{"valid with display name", `'''"John Doe" <test@example.com>'''`, true},
 		{"invalid email", "test", true},
 		{"invalid email", "test@", true},
 		{"@example.com", "@example.com", true},
@@ -270,6 +280,7 @@ func TestEmail(t *testing.T) {
 		{"multiple at signs", "test@exa@mple.com", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := Email()()
 			if err := v(tt.email); (err != nil) != tt.wantErr {
@@ -299,6 +310,7 @@ func TestURL(t *testing.T) {
 		{"url with spaces", "http://exa mple.com", true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := URL()()
 			if err := v(tt.url); (err != nil) != tt.wantErr {
@@ -322,6 +334,7 @@ func TestOneOf(t *testing.T) {
 			{"one of with empty value", []string{"a", ""}, "", false},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := OneOf[string](tt.allowed...)()
 				if err := v(tt.val); (err != nil) != tt.wantErr {
@@ -343,6 +356,7 @@ func TestOneOf(t *testing.T) {
 			{"empty allowed", []int{}, 1, true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := OneOf[int](tt.allowed...)()
 				if err := v(tt.val); (err != nil) != tt.wantErr {
@@ -363,6 +377,7 @@ func TestOneOf(t *testing.T) {
 			{"is not one of", []bool{true}, false, true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := OneOf[bool](tt.allowed...)()
 				if err := v(tt.val); (err != nil) != tt.wantErr {
@@ -386,6 +401,7 @@ func TestGt(t *testing.T) {
 			{"less", int8(5), int8(4), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -407,6 +423,7 @@ func TestGt(t *testing.T) {
 			{"less", int16(500), int16(499), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -428,6 +445,7 @@ func TestGt(t *testing.T) {
 			{"less", int32(70000), int32(69999), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -449,6 +467,7 @@ func TestGt(t *testing.T) {
 			{"less", int64(9000000000), int64(8999999999), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -470,6 +489,7 @@ func TestGt(t *testing.T) {
 			{"less", float32(5.5), float32(5.4), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -491,6 +511,7 @@ func TestGt(t *testing.T) {
 			{"less", float64(123.45), float64(123.44), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -512,6 +533,7 @@ func TestGt(t *testing.T) {
 			{"less", uint(5), uint(4), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -533,6 +555,7 @@ func TestGt(t *testing.T) {
 			{"less", uint8(5), uint8(4), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -554,6 +577,7 @@ func TestGt(t *testing.T) {
 			{"less", uint16(500), uint16(499), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -575,6 +599,7 @@ func TestGt(t *testing.T) {
 			{"less", uint32(70000), uint32(69999), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -596,6 +621,7 @@ func TestGt(t *testing.T) {
 			{"less", uint64(9000000000), uint64(8999999999), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -618,6 +644,7 @@ func TestGt(t *testing.T) {
 			{"less", now, now.Add(-time.Minute), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -641,6 +668,7 @@ func TestGte(t *testing.T) {
 			{"value is less", 5, 4, true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gte(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -662,6 +690,7 @@ func TestGte(t *testing.T) {
 			{"value is less", 5, 4, true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gte(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -683,6 +712,7 @@ func TestGte(t *testing.T) {
 			{"value is less", 5.5, 5.4, true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gte(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -705,6 +735,7 @@ func TestGte(t *testing.T) {
 			{"value is less", now, now.Add(-time.Minute), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Gte(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -728,6 +759,7 @@ func TestLt(t *testing.T) {
 			{"greater", int8(4), int8(5), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -749,6 +781,7 @@ func TestLt(t *testing.T) {
 			{"greater", int16(499), int16(500), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -770,6 +803,7 @@ func TestLt(t *testing.T) {
 			{"greater", int32(69999), int32(70000), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -791,6 +825,7 @@ func TestLt(t *testing.T) {
 			{"greater", int64(8999999999), int64(9000000000), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -812,6 +847,7 @@ func TestLt(t *testing.T) {
 			{"greater", float32(5.4), float32(5.5), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -833,6 +869,7 @@ func TestLt(t *testing.T) {
 			{"greater", uint(4), uint(5), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -854,6 +891,7 @@ func TestLt(t *testing.T) {
 			{"greater", uint8(4), uint8(5), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -875,6 +913,7 @@ func TestLt(t *testing.T) {
 			{"greater", uint16(499), uint16(500), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -896,6 +935,7 @@ func TestLt(t *testing.T) {
 			{"greater", uint32(69999), uint32(70000), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -917,6 +957,7 @@ func TestLt(t *testing.T) {
 			{"greater", uint64(8999999999), uint64(9000000000), true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -939,6 +980,7 @@ func TestLt(t *testing.T) {
 			{"greater", now.Add(-time.Minute), now, true},
 		}
 		for _, tt := range tests {
+			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				_, v := Lt(tt.limit)()
 				if err := v(tt.value); (err != nil) != tt.wantErr {
@@ -1077,6 +1119,7 @@ func TestBeTrue(t *testing.T) {
 		{"is false", false, true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := BeTrue()()
 			if err := v(tt.val); (err != nil) != tt.wantErr {
@@ -1096,6 +1139,7 @@ func TestBeFalse(t *testing.T) {
 		{"is true", true, true},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := BeFalse()()
 			if err := v(tt.val); (err != nil) != tt.wantErr {
@@ -1103,4 +1147,180 @@ func TestBeFalse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMin(t *testing.T) {
+	t.Run("int", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			min     int
+			val     int
+			wantErr bool
+		}{
+			{"less", 10, 5, true},
+			{"equal", 10, 10, false},
+			{"greater", 10, 15, false},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Min(tt.min)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Min() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+	t.Run("uint", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			min     uint
+			val     uint
+			wantErr bool
+		}{
+			{"less", 10, 5, true},
+			{"equal", 10, 10, false},
+			{"greater", 10, 15, false},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Min(tt.min)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Min() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+	t.Run("float64", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			min     float64
+			val     float64
+			wantErr bool
+		}{
+			{"less", 10.5, 10.4, true},
+			{"equal", 10.5, 10.5, false},
+			{"greater", 10.5, 10.6, false},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Min(tt.min)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Min() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+	t.Run("time.Time", func(t *testing.T) {
+		now := time.Now()
+		tests := []struct {
+			name    string
+			min     time.Time
+			val     time.Time
+			wantErr bool
+		}{
+			{"less", now, now.Add(-time.Second), true},
+			{"equal", now, now, false},
+			{"greater", now, now.Add(time.Second), false},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Min(tt.min)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Min() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+}
+
+func TestMax(t *testing.T) {
+	t.Run("int", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			max     int
+			val     int
+			wantErr bool
+		}{
+			{"less", 10, 5, false},
+			{"equal", 10, 10, false},
+			{"greater", 10, 15, true},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Max(tt.max)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Max() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+	t.Run("uint", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			max     uint
+			val     uint
+			wantErr bool
+		}{
+			{"less", 10, 5, false},
+			{"equal", 10, 10, false},
+			{"greater", 10, 15, true},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Max(tt.max)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Max() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+	t.Run("float64", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			max     float64
+			val     float64
+			wantErr bool
+		}{
+			{"less", 10.5, 10.4, false},
+			{"equal", 10.5, 10.5, false},
+			{"greater", 10.5, 10.6, true},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Max(tt.max)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Max() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
+	t.Run("time.Time", func(t *testing.T) {
+		now := time.Now()
+		tests := []struct {
+			name    string
+			max     time.Time
+			val     time.Time
+			wantErr bool
+		}{
+			{"less", now, now.Add(-time.Second), false},
+			{"equal", now, now, false},
+			{"greater", now, now.Add(time.Second), true},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				_, v := Max(tt.max)()
+				if err := v(tt.val); (err != nil) != tt.wantErr {
+					t.Errorf("Max() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			})
+		}
+	})
 }
