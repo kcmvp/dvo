@@ -7,7 +7,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
-	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 )
 
@@ -49,9 +48,7 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 		data := result.MustGet()
 		if _enrich != nil {
 			for k, v := range _enrich(c) {
-				op := data.Get(k)
-				lo.Assertf(op.IsPresent(), "property %s exiests", k)
-				data.Set(k, v)
+				data.Add(k, v)
 			}
 		}
 		// Store the validated object in the context for the main handler to use.
