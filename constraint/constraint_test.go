@@ -111,6 +111,42 @@ func TestLengthBetween(t *testing.T) {
 	}
 }
 
+func TestCharSet_value(t *testing.T) {
+	tests := []struct {
+		name      string
+		cs        charSet
+		wantChars string
+		wantName  string
+	}{
+		{"lower case", LowerCaseChar, LowerCaseCharSet, "lower case characters"},
+		{"upper case", UpperCaseChar, UpperCaseCharSet, "upper case characters"},
+		{"number", NumberChar, NumberCharSet, "numbers"},
+		{"special", SpecialChar, SpecialCharSet, "special characters"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotChars, gotName := tt.cs.value()
+			if gotChars != tt.wantChars {
+				t.Errorf("charSet.value() gotChars = %v, want %v", gotChars, tt.wantChars)
+			}
+			if gotName != tt.wantName {
+				t.Errorf("charSet.value() gotName = %v, want %v", gotName, tt.wantName)
+			}
+		})
+	}
+}
+
+func TestCharSet_value_panic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+	// Use a value that is not a defined charSet to trigger the panic
+	var invalidCharSet charSet = 99
+	invalidCharSet.value()
+}
+
 func TestCharSetOnly(t *testing.T) {
 	tests := []struct {
 		name     string

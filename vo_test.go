@@ -23,11 +23,12 @@ func TestTyped(t *testing.T) {
 	t.Run("integers", func(t *testing.T) {
 		// Test cases for integer types
 		tests := []struct {
-			name        string
-			json        string
-			want        mo.Result[any]
-			targetType  any
-			expectedErr error
+			name                string
+			json                string
+			want                mo.Result[any]
+			targetType          any
+			expectedErr         error
+			expectedErrContains string
 		}{
 			{
 				name:       "int_ok",
@@ -91,7 +92,13 @@ func TestTyped(t *testing.T) {
 			},
 			{
 				name:        "int64_overflow",
-				json:        "{\"value\": 9223372036854775808}", // MaxInt64 + 1
+				json:        `{"value": 9223372036854775808}`,
+				targetType:  int64(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
+				name:        "int64_underflow",
+				json:        `{"value": -9223372036854775809}`,
 				targetType:  int64(0),
 				expectedErr: constraint.ErrIntegerOverflow,
 			},
@@ -106,6 +113,12 @@ func TestTyped(t *testing.T) {
 				json:        `{"value": true}`,
 				targetType:  int(0),
 				expectedErr: constraint.ErrTypeMismatch,
+			},
+			{
+				name:                "int_invalid_number_format",
+				json:                `{"value": 1.2.3}`, // Invalid number format
+				targetType:          int(0),
+				expectedErrContains: "could not parse number",
 			},
 		}
 
@@ -130,6 +143,9 @@ func TestTyped(t *testing.T) {
 				if tc.expectedErr != nil {
 					require.True(t, got.IsError(), "expected an error but got none")
 					require.ErrorIs(t, got.Error(), tc.expectedErr, "did not get expected error type")
+				} else if tc.expectedErrContains != "" {
+					require.True(t, got.IsError(), "expected an error but got none")
+					require.Contains(t, got.Error().Error(), tc.expectedErrContains, "error message does not contain expected text")
 				} else {
 					require.False(t, got.IsError(), "got unexpected error: %v", got.Error())
 					require.Equal(t, tc.want.MustGet(), got.MustGet())
@@ -139,11 +155,12 @@ func TestTyped(t *testing.T) {
 	})
 	t.Run("unsigned integers", func(t *testing.T) {
 		tests := []struct {
-			name        string
-			json        string
-			want        mo.Result[any]
-			targetType  any
-			expectedErr error
+			name                string
+			json                string
+			want                mo.Result[any]
+			targetType          any
+			expectedErr         error
+			expectedErrContains string
 		}{
 			{
 				name:       "uint_ok",
@@ -212,6 +229,12 @@ func TestTyped(t *testing.T) {
 				expectedErr: constraint.ErrIntegerOverflow,
 			},
 			{
+				name:        "uint64_overflow_from_large_number",
+				json:        `{"value": 18446744073709551616}`,
+				targetType:  uint64(0),
+				expectedErr: constraint.ErrIntegerOverflow,
+			},
+			{
 				name:        "uint_from_float_fail",
 				json:        `{"value": 123.45}`,
 				targetType:  uint(0),
@@ -222,6 +245,12 @@ func TestTyped(t *testing.T) {
 				json:        `{"value": true}`,
 				targetType:  uint(0),
 				expectedErr: constraint.ErrTypeMismatch,
+			},
+			{
+				name:                "uint_invalid_number_format",
+				json:                `{"value": 1.2.3}`, // Invalid number format
+				targetType:          uint(0),
+				expectedErrContains: "could not parse number",
 			},
 		}
 
@@ -247,6 +276,9 @@ func TestTyped(t *testing.T) {
 				if tc.expectedErr != nil {
 					require.True(t, got.IsError(), "expected an error but got none")
 					require.ErrorIs(t, got.Error(), tc.expectedErr, "did not get expected error type")
+				} else if tc.expectedErrContains != "" {
+					require.True(t, got.IsError(), "expected an error but got none")
+					require.Contains(t, got.Error().Error(), tc.expectedErrContains, "error message does not contain expected text")
 				} else {
 					require.False(t, got.IsError(), "got unexpected error: %v", got.Error())
 					require.Equal(t, tc.want.MustGet(), got.MustGet())
@@ -338,6 +370,55 @@ func TestTyped(t *testing.T) {
 			})
 		}
 	})
+	t.Run("booleans", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			json        string
+			want        mo.Result[any]
+			targetType  any
+			expectedErr error
+		}{
+			{
+				name:       "bool_ok",
+				json:       `{"value": true}`,
+				want:       mo.Ok(any(true)),
+				targetType: bool(false),
+			},
+			{
+				name:        "bool_from_string_fail",
+				json:        `{"value": "true"}`,
+				targetType:  bool(false),
+				expectedErr: constraint.ErrTypeMismatch,
+			},
+			{
+				name:        "bool_from_number_fail",
+				json:        `{"value": 1}`,
+				targetType:  bool(false),
+				expectedErr: constraint.ErrTypeMismatch,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				res := gjson.Get(tc.json, "value")
+				var got mo.Result[any]
+				switch tc.targetType.(type) {
+				case bool:
+					got = mo.TupleToResult[any](typed[bool](res).Get())
+				default:
+					t.Fatalf("unhandled test type: %T", tc.targetType)
+				}
+
+				if tc.expectedErr != nil {
+					require.True(t, got.IsError(), "expected an error but got none")
+					require.ErrorIs(t, got.Error(), tc.expectedErr, "did not get expected error type")
+				} else {
+					require.False(t, got.IsError(), "got unexpected error: %v", got.Error())
+					require.Equal(t, tc.want.MustGet(), got.MustGet())
+				}
+			})
+		}
+	})
 	t.Run("time", func(t *testing.T) {
 		// Test cases for time.Time
 		now := time.Now()
@@ -360,6 +441,11 @@ func TestTyped(t *testing.T) {
 			{
 				name:        "time_invalid_format",
 				json:        `{"value": "15-01-2023"}`,
+				expectedErr: true,
+			},
+			{
+				name:        "time_from_number_fail",
+				json:        `{"value": 1234567890}`,
 				expectedErr: true,
 			},
 		}
@@ -510,12 +596,12 @@ func TestValidationError_Error(t *testing.T) {
 	}
 }
 
-func TestValidationError_Add(t *testing.T) {
+func TestValidationError_add(t *testing.T) {
 	t.Run("add to nil error map", func(t *testing.T) {
 		e := &validationError{}
 		require.Nil(t, e.errors)
 		err := errors.New("some error")
-		e.Add("field1", err)
+		e.add("field1", err)
 		require.NotNil(t, e.errors)
 		require.Equal(t, err, e.errors["field1"])
 	})
@@ -525,11 +611,11 @@ func TestValidationError_Add(t *testing.T) {
 			errors: make(map[string]error),
 		}
 		err1 := errors.New("error 1")
-		e.Add("field1", err1)
+		e.add("field1", err1)
 		require.Equal(t, err1, e.errors["field1"])
 
 		err2 := errors.New("error 2")
-		e.Add("field2", err2)
+		e.add("field2", err2)
 		require.Equal(t, err2, e.errors["field2"])
 		require.Len(t, e.errors, 2)
 	})
@@ -539,28 +625,28 @@ func TestValidationError_Add(t *testing.T) {
 			errors: make(map[string]error),
 		}
 		err1 := errors.New("error 1")
-		e.Add("field1", err1)
+		e.add("field1", err1)
 		require.Equal(t, err1, e.errors["field1"])
 
 		errOverwrite := errors.New("overwrite error")
-		e.Add("field1", errOverwrite)
+		e.add("field1", errOverwrite)
 		require.Equal(t, errOverwrite, e.errors["field1"])
 		require.Len(t, e.errors, 1)
 	})
 
 	t.Run("add nil error", func(t *testing.T) {
 		e := &validationError{}
-		e.Add("field1", nil)
+		e.add("field1", nil)
 		require.Nil(t, e.errors)
 		require.Len(t, e.errors, 0)
 
 		e.errors = make(map[string]error)
-		e.Add("field2", nil)
+		e.add("field2", nil)
 		require.Len(t, e.errors, 0)
 	})
 }
 
-func TestValidationError_Err(t *testing.T) {
+func TestValidationError_err(t *testing.T) {
 	tests := []struct {
 		name    string
 		err     *validationError
@@ -593,7 +679,7 @@ func TestValidationError_Err(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.err.Err()
+			err := tt.err.err()
 			if tt.wantErr {
 				require.Error(t, err)
 				require.Equal(t, tt.err, err)
@@ -1126,4 +1212,69 @@ func TestValueObject_Set_LogsOnOverwrite(t *testing.T) {
 	logOutput := logBuf.String()
 	require.Contains(t, logOutput, "overwrite existing property", "log should contain overwrite message")
 	require.Contains(t, logOutput, "property=name", "log should contain the property name")
+}
+
+func TestValueObject_MustMethods(t *testing.T) {
+	now := time.Now()
+	vo := valueObject{
+		"my_string":  "hello",
+		"my_int":     int(-1),
+		"my_int8":    int8(-8),
+		"my_int16":   int16(-16),
+		"my_int32":   int32(-32),
+		"my_int64":   int64(-64),
+		"my_uint":    uint(1),
+		"my_uint8":   uint8(8),
+		"my_uint16":  uint16(16),
+		"my_uint32":  uint32(32),
+		"my_uint64":  uint64(64),
+		"my_float32": float32(32.32),
+		"my_float64": float64(64.64),
+		"my_bool":    true,
+		"my_time":    now,
+	}
+
+	t.Run("successful gets", func(t *testing.T) {
+		require.Equal(t, "hello", vo.MstString("my_string"))
+		require.Equal(t, int(-1), vo.MstInt("my_int"))
+		require.Equal(t, int8(-8), vo.MstInt8("my_int8"))
+		require.Equal(t, int16(-16), vo.MstInt16("my_int16"))
+		require.Equal(t, int32(-32), vo.MstInt32("my_int32"))
+		require.Equal(t, int64(-64), vo.MstInt64("my_int64"))
+		require.Equal(t, uint(1), vo.MstUint("my_uint"))
+		require.Equal(t, uint8(8), vo.MstUint8("my_uint8"))
+		require.Equal(t, uint16(16), vo.MstUint16("my_uint16"))
+		require.Equal(t, uint32(32), vo.MstUint32("my_uint32"))
+		require.Equal(t, uint64(64), vo.MstUint64("my_uint64"))
+		require.Equal(t, float32(32.32), vo.MstFloat32("my_float32"))
+		require.Equal(t, float64(64.64), vo.MstFloat64("my_float64"))
+		require.Equal(t, true, vo.MstBool("my_bool"))
+		require.Equal(t, now, vo.MstTime("my_time"))
+	})
+
+	t.Run("panic on missing key", func(t *testing.T) {
+		require.Panics(t, func() { vo.MstString("nonexistent") })
+		require.Panics(t, func() { vo.MstInt("nonexistent") })
+		require.Panics(t, func() { vo.MstInt8("nonexistent") })
+		require.Panics(t, func() { vo.MstInt16("nonexistent") })
+		require.Panics(t, func() { vo.MstInt32("nonexistent") })
+		require.Panics(t, func() { vo.MstInt64("nonexistent") })
+		require.Panics(t, func() { vo.MstUint("nonexistent") })
+		require.Panics(t, func() { vo.MstUint8("nonexistent") })
+		require.Panics(t, func() { vo.MstUint16("nonexistent") })
+		require.Panics(t, func() { vo.MstUint32("nonexistent") })
+		require.Panics(t, func() { vo.MstUint64("nonexistent") })
+		require.Panics(t, func() { vo.MstFloat32("nonexistent") })
+		require.Panics(t, func() { vo.MstFloat64("nonexistent") })
+		require.Panics(t, func() { vo.MstBool("nonexistent") })
+		require.Panics(t, func() { vo.MstTime("nonexistent") })
+	})
+}
+
+func TestField_PanicOnDuplicateValidator(t *testing.T) {
+	t.Run("duplicate validator", func(t *testing.T) {
+		require.PanicsWithValue(t, "dvo: duplicate validator 'min_length' for field 'password'", func() {
+			Field[string]("password")(constraint.MinLength(5), constraint.MinLength(10))
+		})
+	})
 }
