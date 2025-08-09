@@ -65,6 +65,57 @@ var orderVO = dvo.WithFields(
 )
 ```
 
+## Generic Validator
+
+`dvo` comes with a rich set of built-in, generic validators that you can apply to your fields. These validators cover common use cases for strings, numbers, booleans, and time values.
+
+Here’s how you can apply multiple constraints to a single field:
+
+```go
+import (
+    "github.com/kcmvp/dvo"
+    "github.com/kcmvp/dvo/constraint"
+)
+
+var profileVO = dvo.WithFields(
+    // Apply MinLength and MaxLength to the 'username' field.
+    dvo.Field[string]("username",
+        constraint.MinLength(3),
+        constraint.MaxLength(50),
+    )(),
+
+    // Apply Gt (Greater Than) to the 'age' field.
+    dvo.Field[int]("age", constraint.Gt(18))(),
+
+    // Validate that a value is one of the allowed options.
+    dvo.Field[string]("role", constraint.OneOf("admin", "member", "guest"))(),
+)
+```
+
+### Common Built-in Validators
+
+#### String Validators
+- `MinLength(int)`: Validates the minimum string length.
+- `MaxLength(int)`: Validates the maximum string length.
+- `ExactLength(int)`: Validates the exact string length.
+- `LengthBetween(min, max int)`: Validates that the string length is within a given range.
+- `Match(pattern string)`: Validates that the string matches a wildcard pattern (`*`, `?`).
+- `Email()`: Validates that the string is a valid email address.
+- `URL()`: Validates that the string is a valid URL.
+- `OneOf(values ...string)`: Validates that the string is one of the allowed values.
+
+#### Numeric & Time Validators
+- `Gt(min)`: Validates that the value is greater than the minimum.
+- `Gte(min)`: Validates that the value is greater than or equal to the minimum.
+- `Lt(max)`: Validates that the value is less than the maximum.
+- `Lte(max)`: Validates that the value is less than or equal to the maximum.
+- `Between(min, max)`: Validates that the value is within the given range (inclusive).
+- `OneOf(values ...)`: Validates that the value is one of the allowed options.
+
+#### Boolean Validators
+- `BeTrue()`: Validates that the value is `true`.
+- `BeFalse()`: Validates that the value is `false`.
+
 ## Usage with Web Frameworks
 
 `dvo` provides middleware for popular frameworks to make data binding and validation a single, clean step. If validation fails, the middleware will automatically abort the request and send a `400 Bad Request` response.
