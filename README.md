@@ -20,15 +20,19 @@
 
 </p>
 
-`dvo` is a Go library designed to simplify and streamline request body validation and data binding in modern web frameworks. It provides a declarative, fluent API for defining validation rules, keeping your handler logic clean and focused on business concerns.
+**dvo** is a powerful, source-agnostic validation framework for Go that eliminates redundant and scattered validation logic.
+
+We've all felt the pain. For one endpoint, you're meticulously adding struct tags to a JSON request body. For another, you're writing a tangled web of `if/else` statements to validate URL query parameters. The logic for validating the same piece of data, like a user ID, ends up duplicated in multiple places. When a rule changes, you have to hunt down every instance, hoping you don't miss one. This is brittle, error-prone, and doesn't scale.
+
+**dvo** solves this by creating a single source of truth. It provides a fluent, declarative API to build reusable validation schemas (`ValueObject`) that are completely decoupled from the data's origin. You define the validation rules for a concept like 'username' or 'paging' once, and then apply that schema to request bodies, query parameters, or any other data source. This is the core principle of **dvo**: centralize your validation logic, simplify maintenance, and build dramatically more robust and reliable APIs.
 
 ## Features
 
-- **Declarative API:** Define validation rules for your data structures in a clear, readable, and chainable way.
-- **Framework Adaptors:** Out-of-the-box integration with popular web frameworks like Gin.
-- **Extensible Enrichment:** A powerful "Global Enricher" pattern to inject common data (e.g., user info) into your validated objects automatically.
-- **Type-Safe Access:** Easily access validated data from the request context.
-- **Common Validations:** Includes a set of common validators like `Required`, `Min`, `Max`, `Pattern`, and more.
+- **Declarative API:** Define validation schemas for your request data in a clear, readable, and reusable way.
+- **Framework Middleware:** Out-of-the-box integration with Gin, Echo, and Fiber.
+- **Extensible Enrichment:** A powerful "Global Enricher" pattern to inject common data (e.g., user info from an auth middleware) into your validated objects automatically.
+- **Type-Safe Access:** The validation layer ensures data types are correct before your handler logic runs.
+- **Common Constraints:** Includes a set of common validation constraints like `Gt`, `MinLength`, `Pattern`, and more.
 
 ## Installation
 
@@ -38,88 +42,131 @@ go get github.com/kcmvp/dvo
 
 ## Core Concepts
 
-The library revolves around the `ViewObject`, which acts as a blueprint for your request data. You define `Fields` on this object and chain validation rules to them.
+The library revolves around the `ValueObject`, which acts as a reusable validation schema for your request data. You define the schema by composing `Field` definitions, each with its own type and validation constraints.
+
+A `ValueObject` is typically defined once at the package level and reused across different handlers.
 
 ```go
-import "github.com/kcmvp/dvo"
+import (
+    "time"
+    "github.com/kcmvp/dvo"
+    "github.com/kcmvp/dvo/constraint"
+)
 
-// A provider function ensures a fresh ViewObject is used for each request.
-var signupVOProvider = func() *dvo.ViewObject {
-    return dvo.New(
-        dvo.WithFields(
-            dvo.Field[string]("username").Required().Min(5),
-            dvo.Field[string]("password").Required().Min(8),
-            dvo.Field[string]("email").Required().Pattern(dvo.Email),
-        ),
-    )
-}
+// Define a validation schema for a new order.
+// This schema is reusable and can be passed to the validation middleware.
+var orderVO = dvo.WithFields(
+    dvo.Field[string]("OrderID")(),
+    dvo.Field[string]("CustomerID")(),
+    dvo.Field[time.Time]("OrderDate")(),
+    dvo.Field[float64]("Amount", constraint.Gt[float64](0))(),
+    dvo.Field[int]("Priority")().Optional(), // This field is not required
+    dvo.Field[bool]("Shipped")(),
+)
 ```
 
-## Usage with Gin
+## Usage with Web Frameworks
 
-`dvo` makes Gin handler logic incredibly clean by removing validation boilerplate.
+`dvo` provides middleware for popular frameworks to make data binding and validation a single, clean step. If validation fails, the middleware will automatically abort the request and send a `400 Bad Request` response.
 
-### Step 1: Define an (Optional) Global Enricher
-
-An `Enricher` is a function that runs immediately after successful validation, allowing you to add common data to the validated object. This is perfect for injecting user information from an auth middleware.
+### Gin
 
 ```go
 import (
     "github.com/gin-gonic/gin"
-    "github.com/kcmvp/dvo"
-    "github.com/kcmvp/dvo/gin/adaptor"
+    "github.com/kcmvp/dvo/gin/vom" // Gin Validation Middleware
 )
 
-// 1. Define your enricher function.
-// This function will be our global "hook".
-func AddUserInfo(c *gin.Context, vo *dvo.ViewObject) {
-    // Assumes a previous auth middleware has set the userID.
-    userID, _ := c.Get("userID") 
-    // The ViewObject will need a Set method to support this.
-    vo.Set("userID", userID)
+// 1. Define your handler to access the validated data.
+func orderHandler(c *gin.Context) {
+    // The middleware places the validated data into the context.
+    vo := vom.ValueObject(c)
+    // Your logic here...
+    c.JSON(http.StatusOK, vo)
 }
 
-func main() {
-    // 2. Configure the enricher ONCE at application startup.
-    // This tells the adaptor to use this logic for all subsequent `Bind` calls.
-    adaptor.SetGlobalEnricher(AddUserInfo)
-
+// 2. Set up your router.
+func setupRouter() *gin.Engine {
     router := gin.Default()
-    // ... setup routes
+    // 3. Apply the Bind middleware with your validation schema.
+    router.POST("/neworder", vom.Bind(orderVO), orderHandler)
+    return router
 }
 ```
 
-### Step 2: Bind the ViewObject in Your Route
-
-Use `adaptor.Bind()` as a middleware in your route. It handles the entire validation and enrichment process.
+### Echo
 
 ```go
-func main() {
-    // ... (enricher setup from above)
+import (
+    "github.com/labstack/echo/v4"
+    "github.com/kcmvp/dvo/echo/vom" // Echo Validation Middleware
+)
 
-    router := gin.Default()
-    router.Use(Authenticate()) // An auth middleware that sets the "userID"
+// 1. Define your handler.
+func orderHandler(c echo.Context) error {
+    vo := vom.ValueObject(c)
+    // Your logic here...
+    return c.JSON(http.StatusOK, vo)
+}
 
-    // 3. Use `adaptor.Bind` in your route.
-    // It automatically validates the request and then calls the global enricher.
-    router.POST("/signup", adaptor.Bind(signupVOProvider), func(c *gin.Context) {
-        // 4. Access the final, validated, and enriched data.
-        validatedData, _ := dvo.Get(c)
-
-        // `validatedData` is a map[string]any that now contains:
-        // - username (string)
-        // - password (string)
-        // - email (string)
-        // - userID (from the enricher)
-
-        c.JSON(http.StatusOK, gin.H{
-            "message": "signup successful",
-            "data":    validatedData,
-        })
-    })
-
-    router.Run(":8080")
+// 2. Set up your router.
+func setupRouter() *echo.Echo {
+    e := echo.New()
+    // 3. Apply the Bind middleware.
+    e.POST("/neworder", vom.Bind(orderVO)(orderHandler))
+    return e
 }
 ```
 
-With this pattern, your routes are incredibly clean, and your core validation and enrichment logic is defined once in a central, reusable location.
+### Fiber
+
+```go
+import (
+    "github.com/gofiber/fiber/v2"
+    "github.com/kcmvp/dvo/fiber/vom" // Fiber Validation Middleware
+)
+
+// 1. Define your handler.
+func orderHandler(c *fiber.Ctx) error {
+    vo := vom.ValueObject(c)
+    // Your logic here...
+    return c.Status(fiber.StatusOK).JSON(vo)
+}
+
+// 2. Set up your router.
+func setupRouter() *fiber.App {
+    app := fiber.New()
+    // 3. Apply the Bind middleware.
+    app.Post("/neworder", vom.Bind(orderVO), orderHandler)
+    return app
+}
+```
+
+## Global Enricher
+
+You can set a global `Enricher` function that runs after successful validation but before your handler. This is ideal for injecting common data, like a user ID from an authentication middleware. The map returned by the enricher is merged into the validated `ValueObject`.
+
+This function is set **once** at application startup.
+
+```go
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/kcmvp/dvo/gin/vom"
+)
+
+// An enricher function for Gin.
+func addUser(c *gin.Context) map[string]any {
+    // Assumes a previous auth middleware has set the userID.
+    userID, _ := c.Get("userID")
+    return map[string]any{
+        "userID": userID,
+    }
+}
+
+func main() {
+    // Set the enricher once.
+    vom.SetGlobalEnricher(addUser)
+
+    // ... setup router and start server
+}
+```
