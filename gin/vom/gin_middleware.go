@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
-	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
 )
@@ -53,9 +52,7 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 		data := result.MustGet()
 		if _enrich != nil {
 			for k, v := range _enrich(c) {
-				op := data.Get(k)
-				lo.Assertf(op.IsPresent(), "property %s exiests", k)
-				data.Set(k, v)
+				data.Add(k, v)
 			}
 		}
 		// Store the validated object in the request's context for the main handler to use.

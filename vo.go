@@ -2,7 +2,6 @@ package dvo
 
 import (
 	"fmt"
-	"log/slog"
 	"math/big"
 	"reflect"
 	"strings"
@@ -164,7 +163,7 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 		if reflect.New(targetType).Elem().OverflowInt(val) {
 			return mo.Err[T](overflowError(zero))
 		}
-		return mo.Ok(any(reflect.ValueOf(val).Convert(targetType).Interface()).(T))
+		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		if res.Type != gjson.Number {
@@ -192,7 +191,7 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 		if reflect.New(targetType).Elem().OverflowUint(val) {
 			return mo.Err[T](overflowError(zero))
 		}
-		return mo.Ok(any(reflect.ValueOf(val).Convert(targetType).Interface()).(T))
+		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
 
 	case reflect.Float32, reflect.Float64:
 		if res.Type != gjson.Number {
@@ -202,7 +201,7 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 		if reflect.New(targetType).Elem().OverflowFloat(val) {
 			return mo.Err[T](fmt.Errorf("value %f overflows type %T", val, zero))
 		}
-		return mo.Ok(any(reflect.ValueOf(val).Convert(targetType).Interface()).(T))
+		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
 
 	case reflect.Struct:
 		if targetType == reflect.TypeOf(time.Time{}) {
@@ -313,8 +312,9 @@ type ValueObject interface {
 	MstBool(name string) bool
 	Time(name string) mo.Option[time.Time]
 	MstTime(name string) time.Time
-	Set(name string, value any)
 	Get(string) mo.Option[any]
+	Add(name string, value any)
+	Update(name string, value any)
 	seal()
 }
 
@@ -326,10 +326,20 @@ func (vo valueObject) Get(s string) mo.Option[any] {
 	return mo.TupleToOption[any](v, ok)
 }
 
-func (vo valueObject) Set(name string, value any) {
-	_, ok := vo[name]
-	if ok {
-		slog.Info("overwrite existing property", "property", name)
+// Add adds a new property to the value object.
+// It panics if the property already exists.
+func (vo valueObject) Add(name string, value any) {
+	if _, ok := vo[name]; ok {
+		panic(fmt.Sprintf("dvo: property '%s' already exists", name))
+	}
+	vo[name] = value
+}
+
+// Update modifies an existing property in the value object.
+// It panics if the property does not exist.
+func (vo valueObject) Update(name string, value any) {
+	if _, ok := vo[name]; !ok {
+		panic(fmt.Sprintf("dvo: property '%s' does not exist", name))
 	}
 	vo[name] = value
 }
@@ -427,61 +437,61 @@ func (vo valueObject) MstInt64(name string) int64 {
 }
 
 // Uint returns an Option containing the uint value for the given name.
-// It panics if the field exists but is not a uint.
+// It panics if the field exists but is not a unit.
 func (vo valueObject) Uint(name string) mo.Option[uint] {
 	return get[uint](vo, name)
 }
 
 // MstUint returns the uint value for the given name.
-// It panics if the key is not found or the value is not a uint.
+// It panics if the key is not found or the value is not a unit.
 func (vo valueObject) MstUint(name string) uint {
 	return vo.Uint(name).MustGet()
 }
 
 // Uint8 returns an Option containing the uint8 value for the given name.
-// It panics if the field exists but is not a uint8.
+// It panics if the field exists but is not an unit8.
 func (vo valueObject) Uint8(name string) mo.Option[uint8] {
 	return get[uint8](vo, name)
 }
 
 // MstUint8 returns the uint8 value for the given name.
-// It panics if the key is not found or the value is not a uint8.
+// It panics if the key is not found or the value is not an unit8.
 func (vo valueObject) MstUint8(name string) uint8 {
 	return vo.Uint8(name).MustGet()
 }
 
 // Uint16 returns an Option containing the uint16 value for the given name.
-// It panics if the field exists but is not a uint16.
+// It panics if the field exists but is not an unit16.
 func (vo valueObject) Uint16(name string) mo.Option[uint16] {
 	return get[uint16](vo, name)
 }
 
 // MstUint16 returns the uint16 value for the given name.
-// It panics if the key is not found or the value is not a uint16.
+// It panics if the key is not found or the value is not an unit16.
 func (vo valueObject) MstUint16(name string) uint16 {
 	return vo.Uint16(name).MustGet()
 }
 
 // Uint32 returns an Option containing the uint32 value for the given name.
-// It panics if the field exists but is not a uint32.
+// It panics if the field exists but is not an unit32.
 func (vo valueObject) Uint32(name string) mo.Option[uint32] {
 	return get[uint32](vo, name)
 }
 
 // MstUint32 returns the uint32 value for the given name.
-// It panics if the key is not found or the value is not a uint32.
+// It panics if the key is not found or the value is not an unit32.
 func (vo valueObject) MstUint32(name string) uint32 {
 	return vo.Uint32(name).MustGet()
 }
 
 // Uint64 returns an Option containing the uint64 value for the given name.
-// It panics if the field exists but is not a uint64.
+// It panics if the field exists but is not an unit64.
 func (vo valueObject) Uint64(name string) mo.Option[uint64] {
 	return get[uint64](vo, name)
 }
 
 // MstUint64 returns the uint64 value for the given name.
-// It panics if the key is not found or the value is not a uint64.
+// It panics if the key is not found or the value is not an unit64.
 func (vo valueObject) MstUint64(name string) uint64 {
 	return vo.Uint64(name).MustGet()
 }

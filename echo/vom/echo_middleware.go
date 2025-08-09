@@ -9,7 +9,6 @@ import (
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
 )
@@ -74,9 +73,7 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 			// path parameters, headers, or other request context.
 			if _enrich != nil {
 				for k, v := range _enrich(c) {
-					op := data.Get(k)
-					lo.Assertf(op.IsPresent(), "property %s exiests", k)
-					data.Set(k, v)
+					data.Add(k, v)
 				}
 			}
 
