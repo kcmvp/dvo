@@ -52,9 +52,6 @@ var (
 	ErrLengthExact   = errors.New("length must be exactly")
 	ErrLengthBetween = errors.New("length must be between")
 
-	ErrMin = errors.New("must be at least")
-	ErrMax = errors.New("must be at most")
-
 	ErrCharSetOnly   = errors.New("can only contain characters from")
 	ErrCharSetAny    = errors.New("must contain at least one character from")
 	ErrCharSetAll    = errors.New("not contains chars from")
@@ -76,9 +73,9 @@ var (
 func (set charSet) value() (chars string, name string) {
 	switch set {
 	case LowerCaseChar:
-		return LowerCaseCharSet, "lower case letters"
+		return LowerCaseCharSet, "lower case characters"
 	case UpperCaseChar:
-		return UpperCaseCharSet, "upper case letters"
+		return UpperCaseCharSet, "upper case characters"
 	case NumberChar:
 		return NumberCharSet, "numbers"
 	case SpecialChar:

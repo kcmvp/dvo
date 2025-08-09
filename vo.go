@@ -32,8 +32,8 @@ func (e *validationError) Error() string {
 	return b.String()
 }
 
-// Add adds a new error to the map.
-func (e *validationError) Add(fieldName string, err error) {
+// add adds a new error to the map.
+func (e *validationError) add(fieldName string, err error) {
 	if err != nil {
 		if e.errors == nil {
 			e.errors = make(map[string]error)
@@ -42,8 +42,8 @@ func (e *validationError) Add(fieldName string, err error) {
 	}
 }
 
-// Err returns the validationError as a single error if it contains any errors.
-func (e *validationError) Err() error {
+// err returns the validationError as a single error if it contains any errors.
+func (e *validationError) err() error {
 	if e == nil || len(e.errors) == 0 {
 		return nil
 	}
@@ -284,20 +284,35 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 // The seal method prevents implementations outside this package.
 type ValueObject interface {
 	String(name string) mo.Option[string]
+	MstString(name string) string
 	Int(name string) mo.Option[int]
+	MstInt(name string) int
 	Int8(name string) mo.Option[int8]
+	MstInt8(name string) int8
 	Int16(name string) mo.Option[int16]
+	MstInt16(name string) int16
 	Int32(name string) mo.Option[int32]
+	MstInt32(name string) int32
 	Int64(name string) mo.Option[int64]
+	MstInt64(name string) int64
 	Uint(name string) mo.Option[uint]
+	MstUint(name string) uint
 	Uint8(name string) mo.Option[uint8]
+	MstUint8(name string) uint8
 	Uint16(name string) mo.Option[uint16]
+	MstUint16(name string) uint16
 	Uint32(name string) mo.Option[uint32]
+	MstUint32(name string) uint32
 	Uint64(name string) mo.Option[uint64]
+	MstUint64(name string) uint64
 	Float64(name string) mo.Option[float64]
+	MstFloat64(name string) float64
 	Float32(name string) mo.Option[float32]
+	MstFloat32(name string) float32
 	Bool(name string) mo.Option[bool]
+	MstBool(name string) bool
 	Time(name string) mo.Option[time.Time]
+	MstTime(name string) time.Time
 	Set(name string, value any)
 	Get(string) mo.Option[any]
 	seal()
@@ -345,10 +360,22 @@ func (vo valueObject) String(name string) mo.Option[string] {
 	return get[string](vo, name)
 }
 
+// MstString returns the string value for the given name.
+// It panics if the key is not found or the value is not a string.
+func (vo valueObject) MstString(name string) string {
+	return vo.String(name).MustGet()
+}
+
 // Int returns an Option containing the int value for the given name.
 // It panics if the field exists but is not an int.
 func (vo valueObject) Int(name string) mo.Option[int] {
 	return get[int](vo, name)
+}
+
+// MstInt returns the int value for the given name.
+// It panics if the key is not found or the value is not an int.
+func (vo valueObject) MstInt(name string) int {
+	return vo.Int(name).MustGet()
 }
 
 // Int8 returns an Option containing the int8 value for the given name.
@@ -357,10 +384,22 @@ func (vo valueObject) Int8(name string) mo.Option[int8] {
 	return get[int8](vo, name)
 }
 
+// MstInt8 returns the int8 value for the given name.
+// It panics if the key is not found or the value is not an int8.
+func (vo valueObject) MstInt8(name string) int8 {
+	return vo.Int8(name).MustGet()
+}
+
 // Int16 returns an Option containing the int16 value for the given name.
 // It panics if the field exists but is not an int16.
 func (vo valueObject) Int16(name string) mo.Option[int16] {
 	return get[int16](vo, name)
+}
+
+// MstInt16 returns the int16 value for the given name.
+// It panics if the key is not found or the value is not an int16.
+func (vo valueObject) MstInt16(name string) int16 {
+	return vo.Int16(name).MustGet()
 }
 
 // Int32 returns an Option containing the int32 value for the given name.
@@ -369,10 +408,22 @@ func (vo valueObject) Int32(name string) mo.Option[int32] {
 	return get[int32](vo, name)
 }
 
+// MstInt32 returns the int32 value for the given name.
+// It panics if the key is not found or the value is not an int32.
+func (vo valueObject) MstInt32(name string) int32 {
+	return vo.Int32(name).MustGet()
+}
+
 // Int64 returns an Option containing the int64 value for the given name.
 // It panics if the field exists but is not an int64.
 func (vo valueObject) Int64(name string) mo.Option[int64] {
 	return get[int64](vo, name)
+}
+
+// MstInt64 returns the int64 value for the given name.
+// It panics if the key is not found or the value is not an int64.
+func (vo valueObject) MstInt64(name string) int64 {
+	return vo.Int64(name).MustGet()
 }
 
 // Uint returns an Option containing the uint value for the given name.
@@ -381,10 +432,22 @@ func (vo valueObject) Uint(name string) mo.Option[uint] {
 	return get[uint](vo, name)
 }
 
+// MstUint returns the uint value for the given name.
+// It panics if the key is not found or the value is not a uint.
+func (vo valueObject) MstUint(name string) uint {
+	return vo.Uint(name).MustGet()
+}
+
 // Uint8 returns an Option containing the uint8 value for the given name.
 // It panics if the field exists but is not a uint8.
 func (vo valueObject) Uint8(name string) mo.Option[uint8] {
 	return get[uint8](vo, name)
+}
+
+// MstUint8 returns the uint8 value for the given name.
+// It panics if the key is not found or the value is not a uint8.
+func (vo valueObject) MstUint8(name string) uint8 {
+	return vo.Uint8(name).MustGet()
 }
 
 // Uint16 returns an Option containing the uint16 value for the given name.
@@ -393,10 +456,22 @@ func (vo valueObject) Uint16(name string) mo.Option[uint16] {
 	return get[uint16](vo, name)
 }
 
+// MstUint16 returns the uint16 value for the given name.
+// It panics if the key is not found or the value is not a uint16.
+func (vo valueObject) MstUint16(name string) uint16 {
+	return vo.Uint16(name).MustGet()
+}
+
 // Uint32 returns an Option containing the uint32 value for the given name.
 // It panics if the field exists but is not a uint32.
 func (vo valueObject) Uint32(name string) mo.Option[uint32] {
 	return get[uint32](vo, name)
+}
+
+// MstUint32 returns the uint32 value for the given name.
+// It panics if the key is not found or the value is not a uint32.
+func (vo valueObject) MstUint32(name string) uint32 {
+	return vo.Uint32(name).MustGet()
 }
 
 // Uint64 returns an Option containing the uint64 value for the given name.
@@ -405,10 +480,22 @@ func (vo valueObject) Uint64(name string) mo.Option[uint64] {
 	return get[uint64](vo, name)
 }
 
-// Float returns an Option containing the float64 value for the given name.
+// MstUint64 returns the uint64 value for the given name.
+// It panics if the key is not found or the value is not a uint64.
+func (vo valueObject) MstUint64(name string) uint64 {
+	return vo.Uint64(name).MustGet()
+}
+
+// Float64 Float returns an Option containing the float64 value for the given name.
 // It panics if the field exists but is not a float64.
 func (vo valueObject) Float64(name string) mo.Option[float64] {
 	return get[float64](vo, name)
+}
+
+// MstFloat64 returns the float64 value for the given name.
+// It panics if the key is not found or the value is not a float64.
+func (vo valueObject) MstFloat64(name string) float64 {
+	return vo.Float64(name).MustGet()
 }
 
 // Float32 returns an Option containing the float32 value for the given name.
@@ -417,16 +504,34 @@ func (vo valueObject) Float32(name string) mo.Option[float32] {
 	return get[float32](vo, name)
 }
 
+// MstFloat32 returns the float32 value for the given name.
+// It panics if the key is not found or the value is not a float32.
+func (vo valueObject) MstFloat32(name string) float32 {
+	return vo.Float32(name).MustGet()
+}
+
 // Bool returns an Option containing the bool value for the given name.
 // It panics if the field exists but is not a bool.
 func (vo valueObject) Bool(name string) mo.Option[bool] {
 	return get[bool](vo, name)
 }
 
+// MstBool returns the bool value for the given name.
+// It panics if the key is not found or the value is not a bool.
+func (vo valueObject) MstBool(name string) bool {
+	return vo.Bool(name).MustGet()
+}
+
 // Time returns an Option containing the time.Time value for the given name.
 // It panics if the field exists but is not a time.Time.
 func (vo valueObject) Time(name string) mo.Option[time.Time] {
 	return get[time.Time](vo, name)
+}
+
+// MstTime returns the time.Time value for the given name.
+// It panics if the key is not found or the value is not a time.Time.
+func (vo valueObject) MstTime(name string) time.Time {
+	return vo.Time(name).MustGet()
 }
 
 func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
@@ -440,7 +545,7 @@ func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 		}
 		gjson.Parse(json).ForEach(func(key, value gjson.Result) bool {
 			if _, exists := knownFields[key.String()]; !exists {
-				errs.Add(key.String(), fmt.Errorf("unknown field '%s'", key.String()))
+				errs.add(key.String(), fmt.Errorf("unknown field '%s'", key.String()))
 			}
 			return true // continue iterating
 		})
@@ -449,7 +554,7 @@ func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 	for _, field := range vo.fields {
 		v, found, err := field.validate(json)
 		if err != nil {
-			errs.Add(field.Name(), err)
+			errs.add(field.Name(), err)
 			// We continue even if a field is not found but required,
 			// to collect all errors.
 			continue
@@ -459,7 +564,7 @@ func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 			object[field.Name()] = v
 		}
 	}
-	if err := errs.Err(); err != nil {
+	if err := errs.err(); err != nil {
 		return mo.Err[ValueObject](err)
 	}
 	return mo.Ok[ValueObject](object)
