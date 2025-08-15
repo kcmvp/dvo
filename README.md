@@ -184,7 +184,6 @@ var orderWithItemsSchema = dvo.WithFields(
 
 `dvo` provides middleware for popular frameworks to make data binding and validation a single, clean step. If validation fails, the middleware will automatically abort the request and send a `400 Bad Request` response.
 
-### Gin
 
 
 ```go
@@ -216,6 +215,7 @@ var orderVO = dvo.WithFields(
 )
 ```
 
+### Gin
 
 ```go
 import (
@@ -242,34 +242,6 @@ func setupRouter() *gin.Engine {
 
 ### Echo
 
-```go
-import (
-    "time"
-    "github.com/kcmvp/dvo"
-    "github.com/kcmvp/dvo/constraint"
-)
-
-// 1. Define a schema for a single item within an order.
-var orderItem = dvo.WithFields(
-    dvo.Field[string]("ProductID", constraint.MinLength(1))(),
-    dvo.Field[string]("ProductName", constraint.MinLength(1))(),
-    dvo.Field[int]("Quantity", constraint.Gt(0))(),
-    dvo.Field[float64]("Price", constraint.Gt(0.0))(),
-)
-
-// 2. Define the main order schema, embedding an array of order items.
-// This schema is reusable and can be passed to the validation middleware.
-var orderVO = dvo.WithFields(
-    dvo.Field[string]("OrderID")(),
-    dvo.Field[string]("CustomerID")(),
-    dvo.Field[time.Time]("OrderDate")(),
-    dvo.Field[float64]("Amount", constraint.Gt[float64](0))(),
-    dvo.Field[int]("Priority")().Optional(), // This field is not required
-    dvo.Field[bool]("Shipped")(),
-    // Embed the orderItem schema as an array.
-    dvo.ArrayOfObjectField("Items", orderItem)...,
-)
-```
 
 ```go
 import (
@@ -295,34 +267,6 @@ func setupRouter() *echo.Echo {
 
 ### Fiber
 
-```go
-import (
-    "time"
-    "github.com/kcmvp/dvo"
-    "github.com/kcmvp/dvo/constraint"
-)
-
-// 1. Define a schema for a single item within an order.
-var orderItem = dvo.WithFields(
-    dvo.Field[string]("ProductID", constraint.MinLength(1))(),
-    dvo.Field[string]("ProductName", constraint.MinLength(1))(),
-    dvo.Field[int]("Quantity", constraint.Gt(0))(),
-    dvo.Field[float64]("Price", constraint.Gt(0.0))(),
-)
-
-// 2. Define the main order schema, embedding an array of order items.
-// This schema is reusable and can be passed to the validation middleware.
-var orderVO = dvo.WithFields(
-    dvo.Field[string]("OrderID")(),
-    dvo.Field[string]("CustomerID")(),
-    dvo.Field[time.Time]("OrderDate")(),
-    dvo.Field[float64]("Amount", constraint.Gt[float64](0))(),
-    dvo.Field[int]("Priority")().Optional(), // This field is not required
-    dvo.Field[bool]("Shipped")(),
-    // Embed the orderItem schema as an array.
-    dvo.ArrayOfObjectField("Items", orderItem)...,
-)
-```
 
 ```go
 import (
