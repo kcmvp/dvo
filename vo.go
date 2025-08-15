@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kcmvp/dvo/constraint"
+	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
 )
@@ -23,10 +26,17 @@ func (e *validationError) Error() string {
 	if e == nil || len(e.errors) == 0 {
 		return ""
 	}
+	// Sort keys for deterministic error messages, which is good for testing.
+	keys := make([]string, 0, len(e.errors))
+	for k := range e.errors {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var b strings.Builder
 	b.WriteString("validation failed with the following errors:")
-	for _, err := range e.errors {
-		b.WriteString(fmt.Sprintf("- %s", err.Error()))
+	for _, k := range keys {
+		b.WriteString(fmt.Sprintf("- %s: %s", k, e.errors[k]))
 	}
 	return b.String()
 }
@@ -49,74 +59,142 @@ func (e *validationError) err() error {
 	return e
 }
 
-// viewField is an internal, non-generic interface that allows ViewObject
+// ViewField is an internal, non-generic interface that allows ViewObject
 // to hold a collection of fields with different underlying generic types.
-type viewField interface {
+type ViewField interface {
 	Name() string
-	// validate checks the json string. It returns the value, whether it was found, and any error.
-	validate(json string) (value any, found bool, err error)
+	IsArray() bool
+	IsObject() bool
+	Required() bool
+	validate(node gjson.Result) mo.Result[any]
+	nestedObject() mo.Option[*ViewObject]
 }
 
-type ViewField[T constraint.JSONType] struct {
+type JSONField[T constraint.FieldType] struct {
 	name       string
 	required   bool
+	array      bool
+	object     bool
+	nested     *ViewObject
 	validators []constraint.Validator[T]
 }
 
-var _ viewField = (*ViewField[string])(nil)
+func (f *JSONField[T]) Required() bool {
+	return f.required
+}
 
-func (f *ViewField[T]) Name() string {
+func (f *JSONField[T]) IsArray() bool {
+	return f.array
+}
+
+func (f *JSONField[T]) IsObject() bool {
+	return f.object
+}
+
+func (f *JSONField[T]) nestedObject() mo.Option[*ViewObject] {
+	return lo.Ternary(f.nested == nil, mo.None[*ViewObject](), mo.Some(f.nested))
+}
+
+var _ ViewField = (*JSONField[string])(nil)
+
+func (f *JSONField[T]) Name() string {
 	return f.name
 }
 
-func (f *ViewField[T]) Optional() *ViewField[T] {
+func (f *JSONField[T]) Optional() *JSONField[T] {
 	f.required = false
 	return f
 }
 
-// validate implements the internal viewField interface. It uses the public Validate
-// method and translates its result into the format required by the ViewObject.
-func (f *ViewField[T]) validate(json string) (any, bool, error) {
-	rs, found := f.Validate(json)
-	// If there's an error, we always propagate it, along with the found status.
-	if rs.IsError() {
-		return nil, found, rs.Error()
-	}
-	// If not found and no error, it was an optional field. Signal to skip it.
-	if !found {
-		return nil, false, nil
-	}
-	// Otherwise, it was found and is valid.
-	return rs.MustGet(), true, nil
-}
-
-// Validate checks the given JSON string for the field. It returns a Result monad
-// containing the typed value or an error, and a boolean indicating if the field
-// was present in the JSON.
-func (f *ViewField[T]) Validate(json string) (mo.Result[T], bool) {
-	res := gjson.Get(json, f.name)
-	if !res.Exists() {
-		if f.required {
-			return mo.Err[T](fmt.Errorf("%s %w", f.name, constraint.ErrRequired)), false
+// Validate checks the given raw string for the field. It returns a Result monad
+// containing the typed value or an error
+func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
+	// Case: Nested Single Object
+	if f.IsObject() && !f.IsArray() {
+		// Recursively validate. The result will be a mo.Result[ValueObject].
+		nestedResult := f.nestedObject().MustGet().Validate(node.Raw)
+		if nestedResult.IsError() {
+			// Wrap the error to provide context.
+			return mo.Err[any](fmt.Errorf("field '%s' validation failed, %w", f.Name(), nestedResult.Error()))
 		}
-		// For a missing optional field, return a zero value but signal it was not found.
-		return mo.Ok(*new(T)), false
+		// Return the nested ValueObject itself.
+		return mo.Ok[any](nestedResult.MustGet())
 	}
 
-	typedVal := typed[T](res)
+	// Case: Array
+	if f.IsArray() {
+		if !node.IsArray() {
+			return mo.Err[any](fmt.Errorf("dvo: field '%s' expected a JSON array but got %s", f.Name(), node.Type))
+		}
+		errs := &validationError{}
+		// Subcase: Array of Objects
+		if f.nestedObject().IsPresent() {
+			var values []ValueObject
+			node.ForEach(func(index, element gjson.Result) bool {
+				if !element.IsObject() {
+					errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), fmt.Errorf("expected a JSON object but got %s", element.Type))
+					return true // continue
+				}
+				result := f.nested.Validate(element.Raw)
+				if result.IsError() {
+					// To avoid nested error messages, if the nested validation returns a
+					// validationError with a single underlying error, we extract it.
+					// This makes the final error message cleaner.
+					errToAdd := result.Error()
+					if nested, ok := errToAdd.(*validationError); ok && len(nested.errors) == 1 {
+						for _, v := range nested.errors {
+							errToAdd = v
+						}
+					}
+					errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), errToAdd)
+				} else if errs.err() == nil {
+					values = append(values, result.MustGet())
+				}
+				return true // continue
+			})
+			return lo.Ternary(errs.err() != nil, mo.Err[any](errs.err()), mo.Ok[any](values))
+		}
+
+		// Subcase: Array of Primitives
+		var values []T
+		node.ForEach(func(index, element gjson.Result) bool {
+			// We need to validate each element of the array.
+			typedVal := typed[T](element)
+			if typedVal.IsError() {
+				errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), typedVal.Error())
+				return true // continue to collect all errors
+			}
+
+			val := typedVal.MustGet()
+			// Run validators on each element
+			for _, v := range f.validators {
+				if err := v(val); err != nil {
+					errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), err)
+				}
+			}
+
+			// Only append if there were no errors for this specific element
+			if errs.err() == nil {
+				values = append(values, val)
+			}
+			return true
+		})
+		return lo.Ternary(errs.err() != nil, mo.Err[any](errs.err()), mo.Ok[any](values))
+	}
+	// --- Fallback for simple, non-array, non-object fields ---
+	typedVal := typed[T](node)
 	if typedVal.IsError() {
-		err := fmt.Errorf("field '%s': %w", f.name, typedVal.Error())
-		return mo.Err[T](err), true
+		err := fmt.Errorf("field '%s': %w", f.Name(), typedVal.Error())
+		return mo.Err[any](err)
 	}
-
 	val := typedVal.MustGet()
 	for _, v := range f.validators {
 		if err := v(val); err != nil {
-			err = fmt.Errorf("field '%s': %w", f.name, err)
-			return mo.Err[T](err), true
+			err = fmt.Errorf("field '%s': %w", f.Name(), err)
+			return mo.Err[any](err)
 		}
 	}
-	return mo.Ok(val), true
+	return mo.Ok[any](val)
 }
 
 // overflowError creates a standard error for integer overflow.
@@ -124,11 +202,11 @@ func overflowError[T any](v T) error {
 	return fmt.Errorf("for type %T: %w", v, constraint.ErrIntegerOverflow)
 }
 
-// typed attempts to convert a gjson.Result into the specified JSONType.
+// typed attempts to convert a gjson.Result into the specified FieldType.
 // It returns a mo.Result[T] which contains the typed value on success,
-// or an error if the type conversion fails or the JSON type does not match
+// or an error if the type conversion fails or the raw type does not match
 // the expected Go type.
-func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
+func typed[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 	var zero T
 	targetType := reflect.TypeOf(zero)
 
@@ -228,13 +306,47 @@ func typed[T constraint.JSONType](res gjson.Result) mo.Result[T] {
 	}
 
 	// Default error for unhandled or mismatched types.
-	return mo.Err[T](fmt.Errorf("%w: expected %T but got JSON type %s", constraint.ErrTypeMismatch, zero, res.Type))
+	return mo.Err[T](fmt.Errorf("%w: expected %T but got raw type %s", constraint.ErrTypeMismatch, zero, res.Type))
 }
 
-type FieldBuilder[T constraint.JSONType] func(...constraint.ValidateFunc[T]) *ViewField[T]
+type FieldFunc[T constraint.FieldType] func(...constraint.ValidateFunc[T]) *JSONField[T]
 
-func Field[T constraint.JSONType](name string, vfs ...constraint.ValidateFunc[T]) FieldBuilder[T] {
-	return func(fs ...constraint.ValidateFunc[T]) *ViewField[T] {
+// ObjectField creates a slice of ViewField for a nestedObject object.
+// It takes the name of the object field and a ViewObject representing its schema.
+// Each field in the nestedObject ViewObject will be prefixed with the object's name.
+// The name of the object field should not contain '#' and `.`.
+func ObjectField(name string, nested *ViewObject) FieldFunc[string] {
+	lo.Assertf(nested != nil, "Nested ViewObject is null for ObjectField %s", name)
+	return trait[string](name, false, true, nested)
+}
+
+// ArrayOfObjectField creates a slice of ViewField for an array of nestedObject objects.
+// It takes the name of the array field and a ViewObject representing the schema of its elements.
+// The name of the array field should not contain '#' and `.`.
+func ArrayOfObjectField(name string, nested *ViewObject) FieldFunc[string] {
+	lo.Assertf(nested != nil, "Nested ViewObject is null for ArrayOfObjectField %s", name)
+	return trait[string](name, true, true, nested)
+}
+
+// ArrayField creates a FieldFunc for an array field.
+// It is intended to be used for array fields that contain primitive types.
+// The name of the array field should not contain '#' and `.`.
+func ArrayField[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
+	return trait(name, true, false, nil, vfs...)
+}
+
+// Field creates a FieldFunc for a single field.
+// It takes the name of the field and an optional list of validators.
+// The returned FieldFunc can then be used to create a JSONField,
+// allowing for additional validators to be chained.
+// The name of the field should not contain '#' and `.`.
+func Field[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
+	return trait(name, false, false, nil, vfs...)
+}
+
+func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *ViewObject, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
+	assertFieldName(name)
+	return func(fs ...constraint.ValidateFunc[T]) *JSONField[T] {
 		afs := append(vfs, fs...)
 		names := make(map[string]struct{})
 		var nf []constraint.Validator[T]
@@ -246,22 +358,31 @@ func Field[T constraint.JSONType](name string, vfs ...constraint.ValidateFunc[T]
 			names[n] = struct{}{}
 			nf = append(nf, f)
 		}
-		return &ViewField[T]{
+		return &JSONField[T]{
 			name:       name,
+			array:      isArray,
+			object:     isObject,
+			nested:     nested,
 			validators: nf,
 			required:   true,
 		}
 	}
 }
 
-// ViewObject is a blueprint for validating a JSON object.
+func assertFieldName(name string) {
+	if strings.ContainsAny(name, ".#") {
+		panic(fmt.Sprintf("dvo: field name '%s' cannot contain '.' or '#'", name))
+	}
+}
+
+// ViewObject is a blueprint for validating a raw object.
 type ViewObject struct {
-	fields             []viewField
+	fields             []ViewField
 	allowUnknownFields bool
 }
 
 // WithFields is the constructor for a ViewObject blueprint.
-func WithFields(fields ...viewField) *ViewObject {
+func WithFields(fields ...ViewField) *ViewObject {
 	names := make(map[string]struct{})
 	for _, f := range fields {
 		if _, exists := names[f.Name()]; exists {
@@ -272,7 +393,7 @@ func WithFields(fields ...viewField) *ViewObject {
 	return &ViewObject{fields: fields, allowUnknownFields: false}
 }
 
-// AllowUnknownFields is a fluent method to make the ViewObject accept JSON
+// AllowUnknownFields is a fluent method to make the ViewObject accept raw
 // that contains fields not defined in the schema. Default behavior is to disallow.
 func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 	vo.allowUnknownFields = true
@@ -281,39 +402,164 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 
 // ValueObject is a sealed interface for a type-safe map holding validated ViewObject.
 // The seal method prevents implementations outside this package.
+//
+// All getter methods (String, Int, Get, etc.) support dot notation for hierarchical
+// access to nested objects and arrays.
+//
+// For example, given a ValueObject `vo` representing the JSON:
+//
+//	{
+//	  "user": { "email": "test@example.com" },
+//	  "items": [ { "id": 101 } ]
+//	}
+//
+// You can access nested values like this:
+//
+//	email := vo.MstString("user.email") // "test@example.com"
+//	itemID := vo.MstInt("items.0.id")   // 101
+//
+// If a path is invalid (e.g., key not found), the `Option`
+// based getters (like `String`) will return `mo.None`, while the `Mst` prefixed
+// getters (like `MstString`) will panic.
+//
+// If a path is malformed (e.g., non-integer index for an array, out-of-bounds index)
+// or a type mismatch occurs, all getters will panic.
 type ValueObject interface {
+	// String returns an Option containing the string value for the given name.
+	// It supports dot notation for hierarchical access (e.g., "user.name").
+	// It panics if the field exists but is not a string.
 	String(name string) mo.Option[string]
+	// MstString returns the string value for the given name.
+	// It supports dot notation for hierarchical access (e.g., "user.name").
+	// It panics if the key is not found or the value is not a string.
 	MstString(name string) string
+	// Int returns an Option containing the int value for the given name.
+	// It supports dot notation for hierarchical access (e.g., "user.age").
+	// It panics if the field exists but is not an int.
 	Int(name string) mo.Option[int]
+	// MstInt returns the int value for the given name.
+	// It supports dot notation for hierarchical access (e.g., "user.age").
+	// It panics if the key is not found or the value is not an int.
 	MstInt(name string) int
+	// Int8 returns an Option containing the int8 value for the given name.
+	// It panics if the field exists but is not an int8.
 	Int8(name string) mo.Option[int8]
+	// MstInt8 returns the int8 value for the given name.
+	// It panics if the key is not found or the value is not an int8.
 	MstInt8(name string) int8
+	// Int16 returns an Option containing the int16 value for the given name.
+	// It panics if the field exists but is not an int16.
 	Int16(name string) mo.Option[int16]
+	// MstInt16 returns the int16 value for the given name.
+	// It panics if the key is not found or the value is not an int16.
 	MstInt16(name string) int16
+	// Int32 returns an Option containing the int32 value for the given name.
+	// It panics if the field exists but is not an int32.
 	Int32(name string) mo.Option[int32]
+	// MstInt32 returns the int32 value for the given name.
+	// It panics if the key is not found or the value is not an int32.
 	MstInt32(name string) int32
+	// Int64 returns an Option containing the int64 value for the given name.
+	// It panics if the field exists but is not an int64.
 	Int64(name string) mo.Option[int64]
+	// MstInt64 returns the int64 value for the given name.
+	// It panics if the key is not found or the value is not an int64.
 	MstInt64(name string) int64
+	// Uint returns an Option containing the uint value for the given name.
+	// It panics if the field exists but is not a uint.
 	Uint(name string) mo.Option[uint]
+	// MstUint returns the uint value for the given name.
+	// It panics if the key is not found or the value is not a uint.
 	MstUint(name string) uint
+	// Uint8 returns an Option containing the uint8 value for the given name.
+	// It panics if the field exists but is not a uint8.
 	Uint8(name string) mo.Option[uint8]
+	// MstUint8 returns the uint8 value for the given name.
+	// It panics if the key is not found or the value is not a uint8.
 	MstUint8(name string) uint8
+	// Uint16 returns an Option containing the uint16 value for the given name.
+	// It panics if the field exists but is not a uint16.
 	Uint16(name string) mo.Option[uint16]
+	// MstUint16 returns the uint16 value for the given name.
+	// It panics if the key is not found or the value is not a uint16.
 	MstUint16(name string) uint16
+	// Uint32 returns an Option containing the uint32 value for the given name.
+	// It panics if the field exists but is not a uint32.
 	Uint32(name string) mo.Option[uint32]
+	// MstUint32 returns the uint32 value for the given name.
+	// It panics if the key is not found or the value is not a uint32.
 	MstUint32(name string) uint32
+	// Uint64 returns an Option containing the uint64 value for the given name.
+	// It panics if the field exists but is not a uint64.
 	Uint64(name string) mo.Option[uint64]
+	// MstUint64 returns the uint64 value for the given name.
+	// It panics if the key is not found or the value is not a uint64.
 	MstUint64(name string) uint64
+	// Float64 returns an Option containing the float64 value for the given name.
+	// It panics if the field exists but is not a float64.
 	Float64(name string) mo.Option[float64]
+	// MstFloat64 returns the float64 value for the given name.
+	// It panics if the key is not found or the value is not a float64.
 	MstFloat64(name string) float64
+	// Float32 returns an Option containing the float32 value for the given name.
+	// It panics if the field exists but is not a float32.
 	Float32(name string) mo.Option[float32]
+	// MstFloat32 returns the float32 value for the given name.
+	// It panics if the key is not found or the value is not a float32.
 	MstFloat32(name string) float32
+	// Bool returns an Option containing the bool value for the given name.
+	// It panics if the field exists but is not a bool.
 	Bool(name string) mo.Option[bool]
+	// MstBool returns the bool value for the given name.
+	// It panics if the key is not found or the value is not a bool.
 	MstBool(name string) bool
+	// Time returns an Option containing the time.Time value for the given name.
+	// It panics if the field exists but is not a time.Time.
 	Time(name string) mo.Option[time.Time]
+	// MstTime returns the time.Time value for the given name.
+	// It panics if the key is not found or the value is not a time.Time.
 	MstTime(name string) time.Time
+	// StringArray returns an Option containing a slice of strings for the given name.
+	// It panics if the field exists but is not a []string.
+	StringArray(name string) mo.Option[[]string]
+	// MstStringArray returns a slice of strings for the given name.
+	// It panics if the key is not found or the value is not a []string.
+	MstStringArray(name string) []string
+	// IntArray returns an Option containing a slice of ints for the given name.
+	// It panics if the field exists but is not a []int.
+	IntArray(name string) mo.Option[[]int]
+	// MstIntArray returns a slice of ints for the given name.
+	// It panics if the key is not found or the value is not a []int.
+	MstIntArray(name string) []int
+	// Int64Array returns an Option containing a slice of int64s for the given name.
+	// It panics if the field exists but is not a []int64.
+	Int64Array(name string) mo.Option[[]int64]
+	// MstInt64Array returns a slice of int64s for the given name.
+	// It panics if the key is not found or the value is not a []int64.
+	MstInt64Array(name string) []int64
+	// Float64Array returns an Option containing a slice of float64s for the given name.
+	// It panics if the field exists but is not a []float64.
+	Float64Array(name string) mo.Option[[]float64]
+	// MstFloat64Array returns a slice of float64s for the given name.
+	// It panics if the key is not found or the value is not a []float64.
+	MstFloat64Array(name string) []float64
+	// BoolArray returns an Option containing a slice of bools for the given name.
+	// It panics if the field exists but is not a []bool.
+	BoolArray(name string) mo.Option[[]bool]
+	// MstBoolArray returns a slice of bools for the given name.
+	// It panics if the key is not found or the value is not a []bool.
+	MstBoolArray(name string) []bool
+	// Get retrieves a value of any type from the ValueObject.
+	// It supports dot notation for hierarchical access (e.g., "user.name", "items.0.id").
+	// It returns an Option, which will be `None` if the path is not found.
 	Get(string) mo.Option[any]
+	// Add adds a new property to the value object at the top level.
+	// It does not support dot notation.
+	// It panics if the property already exists.
 	Add(name string, value any)
+	// Update modifies an existing property in the value object at the top level.
+	// It does not support dot notation.
+	// It panics if the property does not exist.
 	Update(name string, value any)
 	seal()
 }
@@ -322,16 +568,15 @@ type ValueObject interface {
 type valueObject map[string]any
 
 func (vo valueObject) Get(s string) mo.Option[any] {
-	v, ok := vo[s]
-	return mo.TupleToOption[any](v, ok)
+	return get[any](vo, s)
 }
 
 // Add adds a new property to the value object.
 // It panics if the property already exists.
 func (vo valueObject) Add(name string, value any) {
-	if _, ok := vo[name]; ok {
-		panic(fmt.Sprintf("dvo: property '%s' already exists", name))
-	}
+	_, ok := vo[name]
+	lo.Assertf(!ok, "dvo: property '%s' already exists", name)
+	lo.Assertf(!strings.Contains(name, "."), "dov: property '%s' contains '.'", name)
 	vo[name] = value
 }
 
@@ -352,16 +597,81 @@ func (vo valueObject) seal() {}
 // get is a generic helper to retrieve a value and assert its type.
 // It returns an Option, which will be empty if the key was not present.
 // It panics if the key exists but the type is incorrect.
-func get[T any](d valueObject, name string) mo.Option[T] {
-	value, ok := d[name]
-	if !ok {
+// If the path contains an invalid index for a slice, it will panic. This function
+// supports dot notation for nested objects and array indexing (e.g., "field.0.nestedField").
+
+func get[T any](data valueObject, name string) mo.Option[T] {
+	parts := strings.Split(name, ".")
+	var currentValue any = data
+	for _, part := range parts {
+		if currentValue == nil {
+			return mo.None[T]()
+		}
+		// If it's a map, look up the key.
+		if vo, ok := currentValue.(valueObject); ok {
+			nextValue, exists := vo[part]
+			if !exists {
+				return mo.None[T]()
+			}
+			currentValue = nextValue
+			continue
+		}
+		// If it's a slice, look up the index.
+		val := reflect.ValueOf(currentValue)
+		if val.Kind() == reflect.Slice {
+			index, err := strconv.Atoi(part)
+			lo.Assertf(err == nil, "dvo: path part '%s' in '%s' is not a valid integer index for a slice", part, name)
+			lo.Assertf(index >= 0 && index < val.Len(), "dvo: array bound exceed: %v", val)
+			currentValue = val.Index(index).Interface()
+			continue
+		}
+		// If we are here, we are trying to traverse into a primitive from a non-final path segment.
 		return mo.None[T]()
 	}
-	typedValue, ok := value.(T)
-	if !ok {
-		panic(fmt.Sprintf("dvo: field '%s' has wrong type: expected %T, got %T", name, *new(T), value))
-	}
+
+	typedValue, ok := currentValue.(T)
+	lo.Assertf(ok, "dvo: field '%s' has wrong type: expected %T, got %T", name, *new(T), currentValue)
 	return mo.Some(typedValue)
+}
+
+func (vo valueObject) StringArray(name string) mo.Option[[]string] {
+	return get[[]string](vo, name)
+}
+
+func (vo valueObject) MstStringArray(name string) []string {
+	return vo.StringArray(name).MustGet()
+}
+
+func (vo valueObject) IntArray(name string) mo.Option[[]int] {
+	return get[[]int](vo, name)
+}
+
+func (vo valueObject) MstIntArray(name string) []int {
+	return vo.IntArray(name).MustGet()
+}
+
+func (vo valueObject) Int64Array(name string) mo.Option[[]int64] {
+	return get[[]int64](vo, name)
+}
+
+func (vo valueObject) MstInt64Array(name string) []int64 {
+	return vo.Int64Array(name).MustGet()
+}
+
+func (vo valueObject) Float64Array(name string) mo.Option[[]float64] {
+	return get[[]float64](vo, name)
+}
+
+func (vo valueObject) MstFloat64Array(name string) []float64 {
+	return vo.Float64Array(name).MustGet()
+}
+
+func (vo valueObject) BoolArray(name string) mo.Option[[]bool] {
+	return get[[]bool](vo, name)
+}
+
+func (vo valueObject) MstBoolArray(name string) []bool {
+	return vo.BoolArray(name).MustGet()
 }
 
 // String returns an Option containing the string value for the given name.
@@ -546,36 +856,42 @@ func (vo valueObject) MstTime(name string) time.Time {
 
 func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 	errs := &validationError{}
-	object := valueObject{}
 	// Check for unknown fields first if not allowed.
 	if !vo.allowUnknownFields {
-		knownFields := make(map[string]struct{}, len(vo.fields))
-		for _, field := range vo.fields {
-			knownFields[field.Name()] = struct{}{}
-		}
-		gjson.Parse(json).ForEach(func(key, value gjson.Result) bool {
-			if _, exists := knownFields[key.String()]; !exists {
-				errs.add(key.String(), fmt.Errorf("unknown field '%s'", key.String()))
+		definedFields := lo.SliceToMap(vo.fields, func(field ViewField) (string, struct{}) {
+			return field.Name(), struct{}{}
+		})
+		lo.ForEach(gjson.Get(json, "@keys").Array(), func(field gjson.Result, index int) {
+			if _, ok := definedFields[field.String()]; !ok {
+				errs.add(field.String(), fmt.Errorf("unknown field '%s'", field.String()))
 			}
-			return true // continue iterating
 		})
 	}
 
+	object := valueObject{}
 	for _, field := range vo.fields {
-		v, found, err := field.validate(json)
-		if err != nil {
-			errs.add(field.Name(), err)
-			// We continue even if a field is not found but required,
-			// to collect all errors.
+		node := gjson.Get(json, field.Name())
+		if !node.Exists() {
+			if field.Required() {
+				errs.add(field.Name(), fmt.Errorf("%s %w", field.Name(), constraint.ErrRequired))
+			}
 			continue
 		}
-		// Only add the field to the final map if it was present in the JSON.
-		if found {
-			object[field.Name()] = v
+		rs := field.validate(node)
+		if rs.IsError() {
+			// If the returned error is a validationError, it likely came from a
+			// nested validation (like an array). We should merge its errors
+			// instead of nesting the error object, which would create ugly, duplicated messages.
+			if nestedErr, ok := rs.Error().(*validationError); ok {
+				for key, err := range nestedErr.errors {
+					errs.add(key, err)
+				}
+			} else {
+				errs.add(field.Name(), rs.Error())
+			}
+			continue
 		}
+		object[field.Name()] = rs.MustGet()
 	}
-	if err := errs.err(); err != nil {
-		return mo.Err[ValueObject](err)
-	}
-	return mo.Ok[ValueObject](object)
+	return lo.Ternary(errs.err() != nil, mo.Err[ValueObject](errs.err()), mo.Ok[ValueObject](object))
 }

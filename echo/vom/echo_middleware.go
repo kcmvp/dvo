@@ -55,7 +55,7 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid JSON format"})
 			}
 
-			// Validate the JSON body against the ViewObject schema.
+			// validate the JSON body against the ViewObject schema.
 			result := vo.Validate(body)
 			if result.IsError() {
 				// If validation fails, return a 400 Bad Request with a structured error message

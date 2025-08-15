@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kcmvp/dvo/constraint"
-
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -465,81 +464,6 @@ func TestTyped(t *testing.T) {
 	})
 }
 
-func TestViewField_Validate(t *testing.T) {
-	tests := []struct {
-		name        string
-		field       *ViewField[string]
-		json        string
-		wantResult  mo.Result[string]
-		wantFound   bool
-		expectedErr error
-	}{
-		{
-			name:       "required_field_present_and_valid",
-			field:      Field[string]("name")(),
-			json:       `{"name": "kcmvp"}`,
-			wantResult: mo.Ok("kcmvp"),
-			wantFound:  true,
-		},
-		{
-			name:        "required_field_missing",
-			field:       Field[string]("name")(),
-			json:        `{}`,
-			wantFound:   false,
-			expectedErr: constraint.ErrRequired,
-		},
-		{
-			name:       "optional_field_missing",
-			field:      Field[string]("name")().Optional(),
-			json:       `{}`,
-			wantResult: mo.Ok(""), // Zero value
-			wantFound:  false,
-		},
-		{
-			name:       "optional_field_present",
-			field:      Field[string]("name")().Optional(),
-			json:       `{"name": "kcmvp"}`,
-			wantResult: mo.Ok("kcmvp"),
-			wantFound:  true,
-		},
-		{
-			name:        "type_mismatch",
-			field:       Field[string]("name")(),
-			json:        `{"name": 123}`,
-			wantFound:   true,
-			expectedErr: constraint.ErrTypeMismatch,
-		},
-		{
-			name:       "custom_validator_success",
-			field:      Field[string]("password")(constraint.MinLength(5)),
-			json:       `{"password": "valid_password"}`,
-			wantResult: mo.Ok("valid_password"),
-			wantFound:  true,
-		},
-		{
-			name:        "custom_validator_failure",
-			field:       Field[string]("password")(constraint.MinLength(6)),
-			json:        `{"password": "short"}`,
-			wantFound:   true,
-			expectedErr: constraint.ErrLengthMin,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			gotResult, gotFound := tc.field.Validate(tc.json)
-			require.Equal(t, tc.wantFound, gotFound)
-			if tc.expectedErr != nil {
-				require.True(t, gotResult.IsError(), "expected an error but got none")
-				require.ErrorIs(t, gotResult.Error(), tc.expectedErr, "did not get expected error type")
-			} else {
-				require.False(t, gotResult.IsError(), "got unexpected error: %v", gotResult.Error())
-				require.Equal(t, tc.wantResult.MustGet(), gotResult.MustGet())
-			}
-		})
-	}
-}
-
 func TestValidationError_Error(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -568,7 +492,7 @@ func TestValidationError_Error(t *testing.T) {
 				},
 			},
 			check: func(t *testing.T, got string) {
-				require.Equal(t, "validation failed with the following errors:- error 1", got)
+				require.Contains(t, got, "- field1: error 1")
 			},
 		},
 		{
@@ -581,8 +505,8 @@ func TestValidationError_Error(t *testing.T) {
 			},
 			check: func(t *testing.T, got string) {
 				require.True(t, strings.HasPrefix(got, "validation failed with the following errors:"))
-				require.Contains(t, got, "- error 1")
-				require.Contains(t, got, "- error 2")
+				require.Contains(t, got, "- field1: error 1")
+				require.Contains(t, got, "- field2: error 2")
 			},
 		},
 	}
@@ -691,10 +615,9 @@ func TestValidationError_err(t *testing.T) {
 func TestViewField_validate(t *testing.T) {
 	tests := []struct {
 		name      string
-		field     viewField
+		field     ViewField
 		json      string
 		wantValue any
-		wantFound bool
 		wantErr   error
 	}{
 		{
@@ -702,7 +625,6 @@ func TestViewField_validate(t *testing.T) {
 			field:     Field[string]("name")(),
 			json:      `{"name": "gopher"}`,
 			wantValue: "gopher",
-			wantFound: true,
 			wantErr:   nil,
 		},
 		{
@@ -710,31 +632,13 @@ func TestViewField_validate(t *testing.T) {
 			field:     Field[string]("name")(constraint.MinLength(10)),
 			json:      `{"name": "gopher"}`,
 			wantValue: nil,
-			wantFound: true,
 			wantErr:   constraint.ErrLengthMin,
-		},
-		{
-			name:      "required_field_missing",
-			field:     Field[string]("name")(),
-			json:      `{}`,
-			wantValue: nil,
-			wantFound: false,
-			wantErr:   constraint.ErrRequired,
-		},
-		{
-			name:      "optional_field_missing",
-			field:     Field[string]("name")().Optional(),
-			json:      `{}`,
-			wantValue: nil,
-			wantFound: false,
-			wantErr:   nil,
 		},
 		{
 			name:      "optional_field_present_and_valid",
 			field:     Field[string]("name")().Optional(),
 			json:      `{"name": "gopher"}`,
 			wantValue: "gopher",
-			wantFound: true,
 			wantErr:   nil,
 		},
 		{
@@ -742,7 +646,6 @@ func TestViewField_validate(t *testing.T) {
 			field:     Field[string]("name")(constraint.MinLength(10)).Optional(),
 			json:      `{"name": "gopher"}`,
 			wantValue: nil,
-			wantFound: true,
 			wantErr:   constraint.ErrLengthMin,
 		},
 		{
@@ -750,23 +653,19 @@ func TestViewField_validate(t *testing.T) {
 			field:     Field[int]("age")(),
 			json:      `{"age": "not-an-age"}`,
 			wantValue: nil,
-			wantFound: true,
 			wantErr:   constraint.ErrTypeMismatch,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotValue, gotFound, gotErr := tc.field.validate(tc.json)
-
-			require.Equal(t, tc.wantFound, gotFound)
-			require.Equal(t, tc.wantValue, gotValue)
-
+			rs := tc.field.validate(gjson.Get(tc.json, tc.field.Name()))
 			if tc.wantErr != nil {
-				require.Error(t, gotErr)
-				require.ErrorIs(t, gotErr, tc.wantErr)
+				require.Error(t, rs.Error())
+				require.ErrorIs(t, rs.Error(), tc.wantErr)
 			} else {
-				require.NoError(t, gotErr)
+				require.NoError(t, rs.Error())
+				require.Equal(t, tc.wantValue, rs.MustGet())
 			}
 		})
 	}
@@ -775,22 +674,22 @@ func TestViewField_validate(t *testing.T) {
 func TestWithFields(t *testing.T) {
 	tests := []struct {
 		name        string
-		fields      []viewField
+		fields      []ViewField
 		shouldPanic bool
 	}{
 		{
 			name:        "no fields",
-			fields:      []viewField{},
+			fields:      []ViewField{},
 			shouldPanic: false,
 		},
 		{
 			name:        "one field",
-			fields:      []viewField{Field[string]("name")()},
+			fields:      []ViewField{Field[string]("name")()},
 			shouldPanic: false,
 		},
 		{
 			name: "multiple unique fields",
-			fields: []viewField{
+			fields: []ViewField{
 				Field[string]("name")(),
 				Field[int]("age")(),
 			},
@@ -798,7 +697,7 @@ func TestWithFields(t *testing.T) {
 		},
 		{
 			name: "duplicate field name",
-			fields: []viewField{
+			fields: []ViewField{
 				Field[string]("name")(),
 				Field[int]("name")(),
 			},
@@ -864,7 +763,7 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 			expectErr:    false,
 		},
 		{
-			name:         "Corner case: empty JSON, should not error",
+			name:         "Corner case: empty raw, should not error",
 			vo:           WithFields(Field[string]("name")()),
 			json:         `{}`,
 			allowUnknown: false,
@@ -930,7 +829,7 @@ func TestEndToEnd(t *testing.T) {
 		Field[string]("status")(constraint.OneOf[string]("active", "inactive", "pending")),
 		Field[string]("tags")(constraint.Match(`tag_*`)),
 		Field[float64]("salary")(constraint.Gt(0.0)),
-		// New fields for all JSON types
+		// New fields for all raw types
 		Field[int8]("level")(constraint.Between[int8](1, 100)),
 		Field[int16]("score")(constraint.Gt[int16](0)),
 		Field[int32]("views")(constraint.Gte[int32](0)),
@@ -1151,7 +1050,7 @@ func TestEndToEnd(t *testing.T) {
 			jsonData, err := os.ReadFile(jsonPath)
 			require.NoError(t, err, "failed to read test data file")
 
-			// Validate
+			// validate
 			res := userView.Validate(string(jsonData))
 
 			if tc.isValid {
@@ -1181,8 +1080,11 @@ func TestValueObject_AddUpdate(t *testing.T) {
 		require.Equal(t, "gopher", name)
 
 		// Test panic on duplicate key
-		require.PanicsWithValue(t, "dvo: property 'name' already exists", func() {
+		require.PanicsWithValue(t, "assertion failed: dvo: property 'name' already exists", func() {
 			vo.Add("name", "another-gopher")
+		})
+		require.PanicsWithValue(t, "assertion failed: dov: property 'a.d' contains '.'", func() {
+			vo.Add("a.d", "another-gopher")
 		})
 	})
 
@@ -1262,10 +1164,219 @@ func TestValueObject_MustMethods(t *testing.T) {
 	})
 }
 
+func TestField_PanicOnInvalidName(t *testing.T) {
+	t.Run("invalid name with dot", func(t *testing.T) {
+		require.PanicsWithValue(t, "dvo: field name 'user.name' cannot contain '.' or '#'", func() {
+			Field[string]("user.name")()
+		})
+	})
+
+	t.Run("invalid name with hash", func(t *testing.T) {
+		require.PanicsWithValue(t, "dvo: field name 'user#name' cannot contain '.' or '#'", func() {
+			Field[string]("user#name")()
+		})
+	})
+}
+
 func TestField_PanicOnDuplicateValidator(t *testing.T) {
 	t.Run("duplicate validator", func(t *testing.T) {
 		require.PanicsWithValue(t, "dvo: duplicate validator 'min_length' for field 'password'", func() {
 			Field[string]("password")(constraint.MinLength(5), constraint.MinLength(10))
 		})
 	})
+}
+
+func TestNestedValidation(t *testing.T) {
+	userSchema := WithFields(
+		Field[string]("name")(constraint.MinLength(1)),
+		Field[string]("email")(constraint.Email()),
+	)
+
+	supplierSchema := WithFields(
+		Field[string]("id")(),
+		Field[string]("name")(constraint.MinLength(1)),
+	)
+
+	itemSchema := WithFields(
+		Field[int]("id")(constraint.Gt(0)),
+		Field[string]("name")(constraint.MinLength(1)),
+		// Add supplier as an optional 3rd level object to not break existing tests
+		ObjectField("supplier", supplierSchema)().Optional(),
+	)
+
+	requestSchema := WithFields(
+		Field[string]("id")(),
+		ObjectField("user", userSchema)(),
+		ArrayField[string]("tags")(constraint.MinLength(2)),
+		ArrayOfObjectField("items", itemSchema)(),
+		ArrayField[string]("string_array")().Optional(),
+		ArrayField[int]("int_array")().Optional(),
+		ArrayField[int64]("int64_array")().Optional(),
+		ArrayField[float64]("float64_array")().Optional(),
+		ArrayField[bool]("bool_array")().Optional(),
+	)
+
+	tests := []struct {
+		name        string
+		jsonFile    string
+		isValid     bool
+		check       func(t *testing.T, vo ValueObject)
+		errContains string
+	}{
+		{
+			name:     "valid nested json",
+			jsonFile: "nested_valid.json",
+			isValid:  true,
+			check: func(t *testing.T, vo ValueObject) {
+				id, _ := vo.String("id").Get()
+				require.Equal(t, "req-123", id)
+
+				// check nested object
+				user, _ := vo.Get("user").Get()
+				userVO := user.(ValueObject)
+				require.Equal(t, "John Doe", userVO.MstString("name"))
+				require.Equal(t, "john.doe@example.com", userVO.MstString("email"))
+
+				// check array of primitive
+				tags, _ := vo.Get("tags").Get()
+				require.Equal(t, []string{"go", "dvo", "testing"}, tags)
+
+				// check array of objects
+				items, _ := vo.Get("items").Get()
+				itemsVO := items.([]ValueObject)
+				require.Len(t, itemsVO, 2)
+				require.Equal(t, 1, itemsVO[0].MstInt("id"))
+				require.Equal(t, "Item A", itemsVO[0].MstString("name"))
+				require.Equal(t, 2, itemsVO[1].MstInt("id"))
+				require.Equal(t, "Item B", itemsVO[1].MstString("name"))
+			},
+		},
+		{
+			name:        "invalid nested user object",
+			jsonFile:    "nested_invalid_user.json",
+			isValid:     false,
+			errContains: "field 'user' validation failed",
+		},
+		{
+			name:        "invalid array of primitives",
+			jsonFile:    "nested_invalid_tags.json",
+			isValid:     false,
+			errContains: "tags[1]: type mismatch: expected string but got raw type Number",
+		},
+		{
+			name:        "invalid array of objects",
+			jsonFile:    "nested_invalid_item.json",
+			isValid:     false,
+			errContains: "items[1]: field 'id': must be greater than 0",
+		},
+		{
+			name:        "invalid array type",
+			jsonFile:    "nested_invalid_array_type.json",
+			isValid:     false,
+			errContains: "field 'tags' expected a JSON array but got String",
+		},
+		{
+			name:        "invalid item type in array of objects",
+			jsonFile:    "nested_invalid_item_type.json",
+			isValid:     false,
+			errContains: "items[1]: expected a JSON object but got String",
+		},
+		{
+			name:        "invalid tag validator",
+			jsonFile:    "nested_invalid_tag_validator.json",
+			isValid:     false,
+			errContains: "tags[1]: length must be at least 2",
+		},
+		{
+			name:     "valid 3-level nested json",
+			jsonFile: "nested_3_level_valid.json",
+			isValid:  true,
+			check: func(t *testing.T, vo ValueObject) {
+				// Test hierarchical access using the Get() method, which calls get[any]
+				email, _ := vo.Get("user.email").Get()
+				require.Equal(t, "deep.validator@example.com", email)
+
+				email = vo.MstString("user.email")
+				require.Equal(t, "deep.validator@example.com", email)
+
+				tag, _ := vo.Get("tags.1").Get()
+				require.Equal(t, "dvo", tag)
+
+				itemID, _ := vo.Get("items.0.id").Get()
+				require.Equal(t, 101, itemID)
+
+				// Test getting a nested object and then accessing its properties
+				supplier := vo.Get("items.0.supplier").MustGet()
+				supplierVO := supplier.(ValueObject)
+				require.Equal(t, "SUP-A", supplierVO.MstString("id"))
+				require.Equal(t, "Supplier Alpha", supplierVO.MstString("name"))
+
+				// check primitive arrays
+				require.Equal(t, []string{"a", "b", "c"}, vo.MstStringArray("string_array"))
+				require.Equal(t, "a", vo.MstString("string_array.0"))
+				require.Equal(t, "c", vo.MstString("string_array.2"))
+				require.Equal(t, []int{1, 2, 3}, vo.MstIntArray("int_array"))
+				require.Equal(t, []int64{10, 20, 30}, vo.MstInt64Array("int64_array"))
+				require.Equal(t, []float64{1.1, 2.2, 3.3}, vo.MstFloat64Array("float64_array"))
+				require.Equal(t, []bool{true, false, true}, vo.MstBoolArray("bool_array"))
+			},
+		},
+		{
+			name:     "panic on invalid array index format",
+			jsonFile: "nested_valid.json",
+			isValid:  true,
+			check: func(t *testing.T, vo ValueObject) {
+				require.PanicsWithValue(t,
+					"assertion failed: dvo: path part 'not-an-index' in 'tags.not-an-index' is not a valid integer index for a slice",
+					func() {
+						vo.Get("tags.not-an-index")
+					})
+			},
+		},
+		{
+			name:     "panic on out of bounds array index",
+			jsonFile: "nested_valid.json",
+			isValid:  true,
+			check: func(t *testing.T, vo ValueObject) {
+				require.PanicsWithValue(t,
+					"assertion failed: dvo: array bound exceed: [go dvo testing]",
+					func() {
+						vo.Get("tags.3")
+					})
+			},
+		},
+		{
+			name:     "traverse into primitive returns none",
+			jsonFile: "nested_valid.json",
+			isValid:  true,
+			check: func(t *testing.T, vo ValueObject) {
+				// 'user.name' is a string. Traversing further into it should fail gracefully.
+				opt := vo.Get("user.name.foo")
+				require.False(t, opt.IsPresent(), "expected None when traversing into a primitive")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			jsonPath := filepath.Join("testdata", tc.jsonFile)
+			jsonData, err := os.ReadFile(jsonPath)
+			require.NoError(t, err, "failed to read test data file")
+
+			res := requestSchema.Validate(string(jsonData))
+
+			if tc.isValid {
+				require.False(t, res.IsError(), "validation failed unexpectedly: %v", res.Error())
+				if tc.check != nil {
+					tc.check(t, res.MustGet())
+				}
+			} else {
+				require.True(t, res.IsError(), "validation should have failed")
+				if tc.errContains != "" {
+					msg := res.Error().Error()
+					require.Contains(t, msg, tc.errContains)
+				}
+			}
+		})
+	}
 }
