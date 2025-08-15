@@ -81,7 +81,7 @@ func TestDynamicVOBinding(t *testing.T) {
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
-			// 4. Validate the outcome.
+			// 4. validate the outcome.
 			assert.Equal(t, tc.expectedStatus, rec.Code)
 			// For the successful case, also verify the content of the response.
 			if tc.expectedStatus == http.StatusOK {

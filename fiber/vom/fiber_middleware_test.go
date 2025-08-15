@@ -86,7 +86,7 @@ func TestDynamicVOBinding(t *testing.T) {
 			req, _ := http.NewRequest("POST", "/neworder", strings.NewReader(payload))
 			// Perform the request using app.Test
 			res, err := app.Test(req)
-			// 4. Validate the outcome.
+			// 4. validate the outcome.
 			assert.Equal(t, tc.expectedStatus, res.StatusCode)
 			// For the successful case, also verify the content of the response.
 			if tc.expectedStatus == http.StatusOK {

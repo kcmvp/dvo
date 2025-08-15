@@ -38,10 +38,10 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 		if !gjson.Valid(body) {
 			return c.JSON(http.StatusBadRequest, "Invalid JSON")
 		}
-		// The Validate method is defined in the internal/core package.
+		// The validate method is defined in the internal/core package.
 		result := vo.Validate(body)
 
-		// The Validate method is defined in the internal/core package.
+		// The validate method is defined in the internal/core package.
 		if result.IsError() {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": result.Error().Error()})
 		}

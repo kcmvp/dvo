@@ -20,13 +20,13 @@ type Number interface {
 	uint | uint8 | uint16 | uint32 | uint64 | int | int8 | int16 | int32 | int64 | float32 | float64
 }
 
-// JSONType is a constraint for the actual Go types we want to validate.
-type JSONType interface {
+// FieldType is a constraint for the actual Go types we want to validate.
+type FieldType interface {
 	Number | string | time.Time | bool
 }
 
-type Validator[T JSONType] func(v T) error
-type ValidateFunc[T JSONType] func() (string, Validator[T])
+type Validator[T FieldType] func(v T) error
+type ValidateFunc[T FieldType] func() (string, Validator[T])
 
 const (
 	LowerCaseChar charSet = iota
@@ -231,8 +231,8 @@ func URL() ValidateFunc[string] {
 // --- Generic and Comparison types.Validators ---
 
 // OneOf validates that a value is one of the allowed values.
-// This works for any comparable type in JSONType (string, bool, all numbers).
-func OneOf[T JSONType](allowed ...T) ValidateFunc[T] {
+// This works for any comparable type in FieldType (string, bool, all numbers).
+func OneOf[T FieldType](allowed ...T) ValidateFunc[T] {
 	return func() (string, Validator[T]) {
 		return "one_of", func(val T) error {
 			return lo.Ternary(!lo.Contains(allowed, val), fmt.Errorf("%w:%v", ErrNotOneOf, allowed), nil)

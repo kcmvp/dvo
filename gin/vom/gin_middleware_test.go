@@ -35,7 +35,7 @@ func setupRouter() *gin.Engine {
 func orderHandler(c *gin.Context) {
 	vo := ValueObject(c)
 	if vo == nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid raw"})
 		return
 	}
 	c.JSON(http.StatusOK, vo)
@@ -88,7 +88,7 @@ func TestDynamicVOBinding(t *testing.T) {
 			req, _ := http.NewRequest("POST", "/neworder", strings.NewReader(payload))
 
 			router.ServeHTTP(rec, req)
-			// 4. Validate the outcome.
+			// 4. validate the outcome.
 			assert.Equal(t, tc.expectedStatus, rec.Code)
 			// For the successful case, also verify the content of the response.
 			if tc.expectedStatus == http.StatusOK {
