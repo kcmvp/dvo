@@ -31,6 +31,7 @@ We've all felt the pain. For one endpoint, you're meticulously adding struct tag
 - **Declarative API:** Define validation schemas for your request data in a clear, readable, and reusable way.
 - **Framework Middleware:** Out-of-the-box integration with Gin, Echo, and Fiber.
 - **Extensible Enrichment:** A powerful "Global Enricher" pattern to inject common data (e.g., user info from an auth middleware) into your validated objects automatically.
+- **Nested Validation:** Easily validate complex structures including nested objects, arrays of primitives, and arrays of objects.
 - **Type-Safe Access:** The validation layer ensures data types are correct before your handler logic runs.
 - **Common Constraints:** Includes a set of common validation constraints like `Gt`, `MinLength`, `Pattern`, and more.
 
@@ -116,6 +117,57 @@ var profileVO = dvo.WithFields(
 - `BeTrue()`: Validates that the value is `true`.
 - `BeFalse()`: Validates that the value is `false`.
 
+## Nested Objects and Arrays
+
+`dvo` provides powerful functions to handle complex, nested JSON structures, including nested objects, arrays of primitives, and arrays of objects. This allows you to build validation schemas that precisely match your data model.
+
+### Nested Objects
+
+Use `ObjectField` to define a schema for a nested JSON object. You create a separate `ViewObject` for the nested structure and then embed it into the parent schema.
+
+```go
+// 1. Define the schema for the nested 'user' object.
+var userSchema = dvo.WithFields(
+    dvo.Field[string]("name")(),
+    dvo.Field[string]("email", constraint.Email()),
+)
+
+// 2. Embed the user schema into the main request schema.
+var requestSchema = dvo.WithFields(
+    dvo.Field[string]("id")(),
+    dvo.ObjectField("user", userSchema)..., // Note the spread operator (...)
+)
+```
+
+### Arrays of Primitives
+
+Use `ArrayField` to validate an array of simple types like `string`, `int`, or `bool`.
+
+```go
+var postSchema = dvo.WithFields(
+    dvo.Field[string]("title")(),
+    dvo.ArrayField[string]("tags")(),
+)
+```
+
+### Arrays of Objects
+
+Use `ArrayOfObjectField` to validate an array where each element is a complex object. You define a schema for the object and then use `ArrayOfObjectField` to specify that the field is an array of that schema.
+
+```go
+// 1. Define the schema for a single item in the array.
+var itemSchema = dvo.WithFields(
+    dvo.Field[int]("id", constraint.Gt(0))(),
+    dvo.Field[string]("name")(),
+)
+
+// 2. Use ArrayOfObjectField in the parent schema.
+var orderSchema = dvo.WithFields(
+    dvo.Field[string]("orderId")(),
+    dvo.ArrayOfObjectField("items", itemSchema)...,
+)
+```
+
 ## Usage with Web Frameworks
 
 `dvo` provides middleware for popular frameworks to make data binding and validation a single, clean step. If validation fails, the middleware will automatically abort the request and send a `400 Bad Request` response.
@@ -165,7 +217,7 @@ func setupRouter() *echo.Echo {
     e := echo.New()
     // 3. Apply the Bind middleware.
     e.POST("/neworder", vom.Bind(orderVO)(orderHandler))
-    return e
+	return e
 }
 ```
 
