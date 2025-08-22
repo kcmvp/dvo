@@ -9,8 +9,8 @@ import (
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"github.com/samber/mo"
-	"github.com/tidwall/gjson"
 )
 
 // EnrichFunc defines a function type that can enrich the validated data with additional key-value pairs.
@@ -34,6 +34,21 @@ func SetGlobalEnricher(enrich EnrichFunc) {
 	})
 }
 
+func urlParams(ctx echo.Context) map[string]string {
+	params := lo.Associate(ctx.ParamNames(), func(name string) (string, string) {
+		return name, ctx.Param(name)
+	})
+	// Add query parameters
+	for name, values := range ctx.QueryParams() {
+		lo.Assertf(len(values) == 1, "query parameter '%s' has multiple values, which is not supported", name)
+		_, ok := params[name]
+		lo.Assertf(!ok, "path parameter and query parameter have conflicting names: '%s'", name)
+		params[name] = values[0]
+	}
+	return params
+
+}
+
 // Bind returns an Echo middleware function that validates incoming JSON request bodies
 // against the provided dvo.ViewObject schema.
 func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
@@ -49,14 +64,8 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to read request body"})
 			}
 			body := string(btsResult.MustGet())
-
-			// Ensure the request body is valid JSON before proceeding with schema validation.
-			if !gjson.Valid(body) {
-				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid JSON format"})
-			}
-
 			// validate the JSON body against the ViewObject schema.
-			result := vo.Validate(body)
+			result := vo.Validate(body, urlParams(c))
 			if result.IsError() {
 				// If validation fails, return a 400 Bad Request with a structured error message
 				// containing the details of the validation failures.
@@ -64,8 +73,6 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 					"error": result.Error().Error(),
 				})
 			}
-
-			// On successful validation, retrieve the resulting ValueObject.
 			data := result.MustGet()
 
 			// If an enrichment function has been provided via SetGlobalEnricher, apply it to add
