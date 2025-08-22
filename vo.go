@@ -15,6 +15,9 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// timeLayouts defines the supported time formats for parsing time.Time fields.
+var timeLayouts = []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
+
 // validationError is a custom error type that holds a map of validation errors,
 // ensuring that there is only one error per field.
 type validationError struct {
@@ -300,13 +303,7 @@ func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		if targetType == reflect.TypeOf(time.Time{}) {
 			if res.Type == gjson.String {
 				dateStr := res.String()
-				layouts := []string{
-					time.RFC3339Nano,
-					time.RFC3339,
-					"2006-01-02T15:04:05",
-					"2006-01-02",
-				}
-				for _, layout := range layouts {
+				for _, layout := range timeLayouts {
 					if t, err := time.Parse(layout, dateStr); err == nil {
 						return mo.Ok(any(t).(T))
 					}
@@ -370,8 +367,7 @@ func typedString[T constraint.FieldType](s string) mo.Result[T] {
 		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
 	case reflect.Struct:
 		if targetType == reflect.TypeOf(time.Time{}) {
-			layouts := []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
-			for _, layout := range layouts {
+			for _, layout := range timeLayouts {
 				if t, err := time.Parse(layout, s); err == nil {
 					return mo.Ok(any(t).(T))
 				}
