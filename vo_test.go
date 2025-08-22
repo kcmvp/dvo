@@ -16,6 +16,284 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func TestTypedString(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name                string
+		input               string
+		targetType          any
+		want                any
+		expectedErr         error
+		expectedErrContains string
+	}{
+		// String cases
+		{
+			name:       "string_ok",
+			input:      "hello world",
+			targetType: "",
+			want:       "hello world",
+		},
+		// Bool cases
+		{
+			name:       "bool_true_ok",
+			input:      "true",
+			targetType: bool(false),
+			want:       true,
+		},
+		{
+			name:       "bool_false_ok",
+			input:      "false",
+			targetType: bool(false),
+			want:       false,
+		},
+		{
+			name:       "bool_1_ok",
+			input:      "1",
+			targetType: bool(false),
+			want:       true,
+		},
+		{
+			name:       "bool_0_ok",
+			input:      "0",
+			targetType: bool(false),
+			want:       false,
+		},
+		{
+			name:                "bool_invalid_string",
+			input:               "not-a-bool",
+			targetType:          bool(false),
+			expectedErrContains: "could not parse 'not-a-bool' as bool",
+		},
+		// Integer cases
+		{
+			name:       "int_ok",
+			input:      "123",
+			targetType: int(0),
+			want:       int(123),
+		},
+		{
+			name:       "int8_ok",
+			input:      "-128",
+			targetType: int8(0),
+			want:       int8(-128),
+		},
+		{
+			name:        "int8_overflow",
+			input:       "128",
+			targetType:  int8(0),
+			expectedErr: constraint.ErrIntegerOverflow,
+		},
+		{
+			name:                "int_invalid_format",
+			input:               "not-a-number",
+			targetType:          int(0),
+			expectedErrContains: "could not parse 'not-a-number' as int",
+		},
+		{
+			name:                "int_from_float_string",
+			input:               "123.45",
+			targetType:          int(0),
+			expectedErrContains: "could not parse '123.45' as int",
+		},
+		// Unsigned Integer cases
+		{
+			name:       "uint_ok",
+			input:      "123",
+			targetType: uint(0),
+			want:       uint(123),
+		},
+		{
+			name:       "uint8_ok",
+			input:      "255",
+			targetType: uint8(0),
+			want:       uint8(255),
+		},
+		{
+			name:        "uint8_overflow",
+			input:       "256",
+			targetType:  uint8(0),
+			expectedErr: constraint.ErrIntegerOverflow,
+		},
+		{
+			name:                "uint_negative_fail",
+			input:               "-1",
+			targetType:          uint(0),
+			expectedErrContains: "could not parse '-1' as uint",
+		},
+		// Float cases
+		{
+			name:       "float64_ok",
+			input:      "123.45",
+			targetType: float64(0),
+			want:       float64(123.45),
+		},
+		{
+			name:       "float32_ok",
+			input:      "1.2e3",
+			targetType: float32(0),
+			want:       float32(1200),
+		},
+		{
+			name:                "float32_overflow",
+			input:               "3.5e38",
+			targetType:          float32(0),
+			expectedErrContains: "overflows type",
+		},
+		// Time cases
+		{
+			name:       "time_rfc3339_ok",
+			input:      now.Format(time.RFC3339Nano),
+			targetType: time.Time{},
+			want:       now,
+		},
+		{
+			name:       "time_date_only_ok",
+			input:      "2024-01-15",
+			targetType: time.Time{},
+			want:       time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:                "time_invalid_format",
+			input:               "15-01-2024",
+			targetType:          time.Time{},
+			expectedErrContains: "incorrect date format",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got mo.Result[any]
+			switch tc.targetType.(type) {
+			case string:
+				got = mo.TupleToResult[any](typedString[string](tc.input).Get())
+			case bool:
+				got = mo.TupleToResult[any](typedString[bool](tc.input).Get())
+			case int:
+				got = mo.TupleToResult[any](typedString[int](tc.input).Get())
+			case int8:
+				got = mo.TupleToResult[any](typedString[int8](tc.input).Get())
+			case uint:
+				got = mo.TupleToResult[any](typedString[uint](tc.input).Get())
+			case uint8:
+				got = mo.TupleToResult[any](typedString[uint8](tc.input).Get())
+			case float32:
+				got = mo.TupleToResult[any](typedString[float32](tc.input).Get())
+			case float64:
+				got = mo.TupleToResult[any](typedString[float64](tc.input).Get())
+			case time.Time:
+				got = mo.TupleToResult[any](typedString[time.Time](tc.input).Get())
+			default:
+				t.Fatalf("unhandled test type: %T", tc.targetType)
+			}
+
+			if tc.expectedErr != nil {
+				require.True(t, got.IsError(), "expected an error but got none")
+				require.ErrorIs(t, got.Error(), tc.expectedErr, "did not get expected error type")
+			} else if tc.expectedErrContains != "" {
+				require.True(t, got.IsError(), "expected an error but got none")
+				require.Contains(t, got.Error().Error(), tc.expectedErrContains, "error message does not contain expected text")
+			} else {
+				require.False(t, got.IsError(), "got unexpected error: %v", got.Error())
+				if wantTime, ok := tc.want.(time.Time); ok {
+					gotTime := got.MustGet().(time.Time)
+					require.WithinDuration(t, wantTime, gotTime, time.Second)
+				} else {
+					require.Equal(t, tc.want, got.MustGet())
+				}
+			}
+		})
+	}
+}
+
+func TestJSONField_validateRaw(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name                string
+		field               ViewField
+		input               string
+		wantValue           any
+		wantErr             error
+		expectedErrContains string
+	}{
+		{
+			name:      "string_success_with_validator",
+			field:     Field[string]("name")(constraint.MinLength(3)),
+			input:     "gopher",
+			wantValue: "gopher",
+		},
+		{
+			name:    "string_validation_fail",
+			field:   Field[string]("name")(constraint.MinLength(10)),
+			input:   "gopher",
+			wantErr: constraint.ErrLengthMin,
+		},
+		{
+			name:      "int_success_with_validator",
+			field:     Field[int]("age")(constraint.Gt(18)),
+			input:     "20",
+			wantValue: 20,
+		},
+		{
+			name:    "int_validation_fail",
+			field:   Field[int]("age")(constraint.Gt(18)),
+			input:   "18",
+			wantErr: constraint.ErrMustGt,
+		},
+		{
+			name:                "int_parsing_fail",
+			field:               Field[int]("age")(),
+			input:               "not-an-age",
+			expectedErrContains: "could not parse 'not-an-age' as int",
+		},
+		{
+			name:      "bool_success",
+			field:     Field[bool]("active")(),
+			input:     "true",
+			wantValue: true,
+		},
+		{
+			name:                "bool_parsing_fail",
+			field:               Field[bool]("active")(),
+			input:               "yes",
+			expectedErrContains: "could not parse 'yes' as bool",
+		},
+		{
+			name:      "time_success",
+			field:     Field[time.Time]("createdAt")(),
+			input:     now.Format(time.RFC3339Nano),
+			wantValue: now,
+		},
+		{
+			name:                "time_parsing_fail",
+			field:               Field[time.Time]("createdAt")(),
+			input:               "not-a-time",
+			expectedErrContains: "incorrect date format",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rs := tc.field.validateRaw(tc.input)
+			if tc.wantErr != nil {
+				require.True(t, rs.IsError(), "expected an error but got none")
+				require.ErrorIs(t, rs.Error(), tc.wantErr, "did not get expected error type")
+			} else if tc.expectedErrContains != "" {
+				require.True(t, rs.IsError(), "expected an error but got none")
+				require.Contains(t, rs.Error().Error(), tc.expectedErrContains, "error message does not contain expected text")
+			} else {
+				require.False(t, rs.IsError(), "got unexpected error: %v", rs.Error())
+				if wantTime, ok := tc.wantValue.(time.Time); ok {
+					gotTime := rs.MustGet().(time.Time)
+					// Use WithinDuration for time comparison to handle minor precision differences
+					require.WithinDuration(t, wantTime, gotTime, time.Second)
+				} else {
+					require.Equal(t, tc.wantValue, rs.MustGet())
+				}
+			}
+		})
+	}
+}
+
 func TestTyped(t *testing.T) {
 	t.Run("integers", func(t *testing.T) {
 		// Test cases for integer types
@@ -112,10 +390,10 @@ func TestTyped(t *testing.T) {
 				expectedErr: constraint.ErrTypeMismatch,
 			},
 			{
-				name:                "int_invalid_number_format",
-				json:                `{"value": 1.2.3}`, // Invalid number format
-				targetType:          int(0),
-				expectedErrContains: "could not parse number",
+				name:        "int_from_malformed_float_fail",
+				json:        `{"value": 1.2.3}`, // gjson is lenient and parses this as a number
+				targetType:  int(0),
+				expectedErr: constraint.ErrTypeMismatch,
 			},
 		}
 
@@ -125,15 +403,15 @@ func TestTyped(t *testing.T) {
 				var got mo.Result[any]
 				switch tc.targetType.(type) {
 				case int:
-					got = mo.TupleToResult[any](typed[int](res).Get())
+					got = mo.TupleToResult[any](typedJson[int](res).Get())
 				case int8:
-					got = mo.TupleToResult[any](typed[int8](res).Get())
+					got = mo.TupleToResult[any](typedJson[int8](res).Get())
 				case int16:
-					got = mo.TupleToResult[any](typed[int16](res).Get())
+					got = mo.TupleToResult[any](typedJson[int16](res).Get())
 				case int32:
-					got = mo.TupleToResult[any](typed[int32](res).Get())
+					got = mo.TupleToResult[any](typedJson[int32](res).Get())
 				case int64:
-					got = mo.TupleToResult[any](typed[int64](res).Get())
+					got = mo.TupleToResult[any](typedJson[int64](res).Get())
 				default:
 					t.Fatalf("unhandled test type: %T", tc.targetType)
 				}
@@ -244,10 +522,10 @@ func TestTyped(t *testing.T) {
 				expectedErr: constraint.ErrTypeMismatch,
 			},
 			{
-				name:                "uint_invalid_number_format",
-				json:                `{"value": 1.2.3}`, // Invalid number format
-				targetType:          uint(0),
-				expectedErrContains: "could not parse number",
+				name:        "uint_from_malformed_float_fail",
+				json:        `{"value": 1.2.3}`, // gjson is lenient and parses this as a number
+				targetType:  uint(0),
+				expectedErr: constraint.ErrTypeMismatch,
 			},
 		}
 
@@ -257,15 +535,15 @@ func TestTyped(t *testing.T) {
 				var got mo.Result[any]
 				switch tc.targetType.(type) {
 				case uint:
-					got = mo.TupleToResult[any](typed[uint](res).Get())
+					got = mo.TupleToResult[any](typedJson[uint](res).Get())
 				case uint8:
-					got = mo.TupleToResult[any](typed[uint8](res).Get())
+					got = mo.TupleToResult[any](typedJson[uint8](res).Get())
 				case uint16:
-					got = mo.TupleToResult[any](typed[uint16](res).Get())
+					got = mo.TupleToResult[any](typedJson[uint16](res).Get())
 				case uint32:
-					got = mo.TupleToResult[any](typed[uint32](res).Get())
+					got = mo.TupleToResult[any](typedJson[uint32](res).Get())
 				case uint64:
-					got = mo.TupleToResult[any](typed[uint64](res).Get())
+					got = mo.TupleToResult[any](typedJson[uint64](res).Get())
 				default:
 					t.Fatalf("unhandled test type: %T", tc.targetType)
 				}
@@ -335,9 +613,9 @@ func TestTyped(t *testing.T) {
 				var got mo.Result[any]
 				switch tc.targetType.(type) {
 				case float32:
-					got = mo.TupleToResult[any](typed[float32](res).Get())
+					got = mo.TupleToResult[any](typedJson[float32](res).Get())
 				case float64:
-					got = mo.TupleToResult[any](typed[float64](res).Get())
+					got = mo.TupleToResult[any](typedJson[float64](res).Get())
 				default:
 					t.Fatalf("unhandled test type: %T", tc.targetType)
 				}
@@ -401,7 +679,7 @@ func TestTyped(t *testing.T) {
 				var got mo.Result[any]
 				switch tc.targetType.(type) {
 				case bool:
-					got = mo.TupleToResult[any](typed[bool](res).Get())
+					got = mo.TupleToResult[any](typedJson[bool](res).Get())
 				default:
 					t.Fatalf("unhandled test type: %T", tc.targetType)
 				}
@@ -450,7 +728,7 @@ func TestTyped(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				res := gjson.Get(tc.json, "value")
-				got := typed[time.Time](res)
+				got := typedJson[time.Time](res)
 
 				if tc.expectedErr {
 					require.True(t, got.IsError(), "expected an error but got none")
@@ -737,7 +1015,7 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 			json:         `{"name": "gopher", "extra": "field"}`,
 			allowUnknown: false,
 			expectErr:    true,
-			errContains:  "unknown field 'extra'",
+			errContains:  "unknown json field 'extra'",
 		},
 		{
 			name:          "AllowUnknownFields enabled: unknown fields allowed, should not error",
@@ -783,7 +1061,7 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 			json:         `{"name": "gopher"}`,
 			allowUnknown: false,
 			expectErr:    true,
-			errContains:  "unknown field 'name'",
+			errContains:  "unknown json field 'name'",
 		},
 	}
 
@@ -1224,14 +1502,14 @@ func TestNestedValidation(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:     "valid nested json",
+			name:     "valid embedded json",
 			jsonFile: "nested_valid.json",
 			isValid:  true,
 			check: func(t *testing.T, vo ValueObject) {
 				id, _ := vo.String("id").Get()
 				require.Equal(t, "req-123", id)
 
-				// check nested object
+				// check embedded object
 				user, _ := vo.Get("user").Get()
 				userVO := user.(ValueObject)
 				require.Equal(t, "John Doe", userVO.MstString("name"))
@@ -1252,10 +1530,10 @@ func TestNestedValidation(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid nested user object",
+			name:        "invalid embedded user object",
 			jsonFile:    "nested_invalid_user.json",
 			isValid:     false,
-			errContains: "field 'user' validation failed",
+			errContains: "email: field 'email': not valid email address",
 		},
 		{
 			name:        "invalid array of primitives",
@@ -1288,7 +1566,7 @@ func TestNestedValidation(t *testing.T) {
 			errContains: "tags[1]: length must be at least 2",
 		},
 		{
-			name:     "valid 3-level nested json",
+			name:     "valid 3-level embedded json",
 			jsonFile: "nested_3_level_valid.json",
 			isValid:  true,
 			check: func(t *testing.T, vo ValueObject) {
@@ -1305,7 +1583,7 @@ func TestNestedValidation(t *testing.T) {
 				itemID, _ := vo.Get("items.0.id").Get()
 				require.Equal(t, 101, itemID)
 
-				// Test getting a nested object and then accessing its properties
+				// Test getting a embedded object and then accessing its properties
 				supplier := vo.Get("items.0.supplier").MustGet()
 				supplierVO := supplier.(ValueObject)
 				require.Equal(t, "SUP-A", supplierVO.MstString("id"))
@@ -1375,6 +1653,116 @@ func TestNestedValidation(t *testing.T) {
 				if tc.errContains != "" {
 					msg := res.Error().Error()
 					require.Contains(t, msg, tc.errContains)
+				}
+			}
+		})
+	}
+}
+
+func TestViewObject_Validate(t *testing.T) {
+	// Define a base ViewObject for testing various validation scenarios.
+	testVO := WithFields(
+		Field[string]("name")(),
+		Field[int]("id")(),
+		ObjectField("user", WithFields(Field[string]("email")()))().Optional(),
+	)
+
+	tests := []struct {
+		name        string
+		vo          *ViewObject
+		json        string
+		urlParams   []map[string]string
+		wantErr     bool
+		errContains string
+		check       func(t *testing.T, vo ValueObject)
+	}{
+		{
+			name:        "invalid json",
+			vo:          testVO,
+			json:        `{"id": 123,}`,
+			urlParams:   nil,
+			wantErr:     true,
+			errContains: "invalid json",
+		},
+		{
+			name:        "duplicated url parameter across maps",
+			vo:          testVO,
+			json:        "",
+			urlParams:   []map[string]string{{"id": "1"}, {"id": "2"}},
+			wantErr:     true,
+			errContains: "duplicated url parameter 'id'",
+		},
+		{
+			name:        "unknown url parameter disallowed",
+			vo:          testVO,
+			json:        "",
+			urlParams:   []map[string]string{{"extra": "param"}},
+			wantErr:     true,
+			errContains: "unknown url parameter 'extra'",
+		},
+		{
+			name: "unknown url parameter allowed",
+			vo:   WithFields(Field[string]("name")()).AllowUnknownFields(),
+			json: `{"name":"gopher"}`,
+			urlParams: []map[string]string{
+				{"extra": "param"},
+				{"another": "value"},
+			},
+			wantErr: false,
+			check: func(t *testing.T, vo ValueObject) {
+				// The unknown params should be in the final object
+				extra, ok := vo.String("extra").Get()
+				require.True(t, ok)
+				require.Equal(t, "param", extra)
+				another, ok := vo.String("another").Get()
+				require.True(t, ok)
+				require.Equal(t, "value", another)
+			},
+		},
+		{
+			name:        "url parameter mapped to embedded object",
+			vo:          testVO,
+			json:        "",
+			urlParams:   []map[string]string{{"user": "some-value"}},
+			wantErr:     true,
+			errContains: "url parameter 'user' is mapped to a embedded object",
+		},
+		{
+			name:        "conflict between json and url parameter",
+			vo:          testVO,
+			json:        `{"id": 123}`,
+			urlParams:   []map[string]string{{"id": "456"}},
+			wantErr:     true,
+			errContains: "duplicate parameter in url and json 'id'",
+		},
+		{
+			name:      "valid with json and url params",
+			vo:        testVO,
+			json:      `{"name": "gopher"}`,
+			urlParams: []map[string]string{{"id": "123"}},
+			wantErr:   false,
+			check: func(t *testing.T, vo ValueObject) {
+				name, _ := vo.String("name").Get()
+				require.Equal(t, "gopher", name)
+				id, _ := vo.Int("id").Get()
+				require.Equal(t, 123, id)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := tc.vo.Validate(tc.json, tc.urlParams...)
+
+			if tc.wantErr {
+				require.True(t, res.IsError(), "expected an error but got none")
+				if tc.errContains != "" {
+					require.Contains(t, res.Error().Error(), tc.errContains, "error message does not contain expected text")
+				}
+			} else {
+				require.False(t, res.IsError(), "got unexpected error: %v", res.Error())
+				if tc.check != nil {
+					tc.check(t, res.MustGet())
 				}
 			}
 		})

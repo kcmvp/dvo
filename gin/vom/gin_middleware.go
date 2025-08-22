@@ -9,8 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
+	"github.com/samber/lo"
 	"github.com/samber/mo"
-	"github.com/tidwall/gjson"
 )
 
 // EnrichFunc defines a function type for enriching the validated data.
@@ -27,39 +27,49 @@ func SetGlobalEnricher(enrich EnrichFunc) {
 	})
 }
 
+func urlParams(ctx *gin.Context) map[string]string {
+	params := lo.Associate(ctx.Params, func(item gin.Param) (string, string) {
+		return item.Key, item.Value
+	})
+	for name, values := range ctx.Request.URL.Query() {
+		lo.Assertf(len(values) == 1, "query parameter '%s' has multiple values, which is not supported", name)
+		_, ok := params[name]
+		lo.Assertf(!ok, "path parameter and query parameter have conflicting names: '%s'", name)
+		params[name] = values[0]
+	}
+	return params
+}
+
 // Bind creates a Gin middleware that validates the request body against a dvo.ViewObject.
 // If validation is successful, the validated data is stored in the request context.
 // If validation fails, it aborts the request with a 400 Bad Request status and an error message.
 // It also allows for enriching the validated data using a previously set EnrichFunc function.
 func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return func(ctx *gin.Context) {
 		// Get a fresh ValueObject instance for this request.
-		bts := mo.TupleToResult[[]byte](io.ReadAll(c.Request.Body))
+		bts := mo.TupleToResult[[]byte](io.ReadAll(ctx.Request.Body))
 		if bts.IsError() {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bts.Error().Error()})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bts.Error().Error()})
 			return
 		}
 		body := string(bts.MustGet())
-		if !gjson.Valid(body) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
-			return
-		}
-		result := vo.Validate(body)
+		result := vo.Validate(body, urlParams(ctx))
 		if result.IsError() {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": result.Error().Error()})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": result.Error().Error()})
 			return
 		}
 		data := result.MustGet()
+
 		if _enrich != nil {
-			for k, v := range _enrich(c) {
+			for k, v := range _enrich(ctx) {
 				data.Add(k, v)
 			}
 		}
 		// Store the validated object in the request's context for the main handler to use.
-		ctx := context.WithValue(c.Request.Context(), internal.ViewObjectKey, data)
-		c.Request = c.Request.WithContext(ctx)
+		nCtx := context.WithValue(ctx.Request.Context(), internal.ViewObjectKey, data)
+		ctx.Request = ctx.Request.WithContext(nCtx)
 		// Proceed to the next handler.
-		c.Next()
+		ctx.Next()
 	}
 }
 

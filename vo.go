@@ -1,8 +1,8 @@
 package dvo
 
 import (
+	"errors"
 	"fmt"
-	"math/big"
 	"reflect"
 	"sort"
 	"strconv"
@@ -67,7 +67,8 @@ type ViewField interface {
 	IsObject() bool
 	Required() bool
 	validate(node gjson.Result) mo.Result[any]
-	nestedObject() mo.Option[*ViewObject]
+	validateRaw(v string) mo.Result[any]
+	embeddedObject() mo.Option[*ViewObject]
 }
 
 type JSONField[T constraint.FieldType] struct {
@@ -75,7 +76,7 @@ type JSONField[T constraint.FieldType] struct {
 	required   bool
 	array      bool
 	object     bool
-	nested     *ViewObject
+	embedded   *ViewObject
 	validators []constraint.Validator[T]
 }
 
@@ -91,8 +92,8 @@ func (f *JSONField[T]) IsObject() bool {
 	return f.object
 }
 
-func (f *JSONField[T]) nestedObject() mo.Option[*ViewObject] {
-	return lo.Ternary(f.nested == nil, mo.None[*ViewObject](), mo.Some(f.nested))
+func (f *JSONField[T]) embeddedObject() mo.Option[*ViewObject] {
+	return lo.Ternary(f.embedded == nil, mo.None[*ViewObject](), mo.Some(f.embedded))
 }
 
 var _ ViewField = (*JSONField[string])(nil)
@@ -106,18 +107,40 @@ func (f *JSONField[T]) Optional() *JSONField[T] {
 	return f
 }
 
+func (f *JSONField[T]) validateRaw(v string) mo.Result[any] {
+	// typedString[T] returns mo.Result[T]
+	// validateRaw needs to return mo.Result[any]
+	typedValResult := typedString[T](v)
+	if typedValResult.IsError() {
+		// Wrap the error to provide more context about the field.
+		err := fmt.Errorf("field '%s': %w", f.Name(), typedValResult.Error())
+		return mo.Err[any](err)
+	}
+
+	val := typedValResult.MustGet()
+	// Run validators on the successfully parsed value.
+	for _, validator := range f.validators {
+		if err := validator(val); err != nil {
+			err = fmt.Errorf("field '%s': %w", f.Name(), err)
+			return mo.Err[any](err)
+		}
+	}
+
+	return mo.Ok[any](val)
+}
+
 // Validate checks the given raw string for the field. It returns a Result monad
-// containing the typed value or an error
+// containing the typedJson value or an error
 func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 	// Case: Nested Single Object
 	if f.IsObject() && !f.IsArray() {
 		// Recursively validate. The result will be a mo.Result[ValueObject].
-		nestedResult := f.nestedObject().MustGet().Validate(node.Raw)
+		nestedResult := f.embeddedObject().MustGet().Validate(node.Raw)
 		if nestedResult.IsError() {
 			// Wrap the error to provide context.
 			return mo.Err[any](fmt.Errorf("field '%s' validation failed, %w", f.Name(), nestedResult.Error()))
 		}
-		// Return the nested ValueObject itself.
+		// Return the embedded ValueObject itself.
 		return mo.Ok[any](nestedResult.MustGet())
 	}
 
@@ -128,20 +151,21 @@ func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 		}
 		errs := &validationError{}
 		// Subcase: Array of Objects
-		if f.nestedObject().IsPresent() {
+		if f.embeddedObject().IsPresent() {
 			var values []ValueObject
 			node.ForEach(func(index, element gjson.Result) bool {
 				if !element.IsObject() {
 					errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), fmt.Errorf("expected a JSON object but got %s", element.Type))
 					return true // continue
 				}
-				result := f.nested.Validate(element.Raw)
+				result := f.embedded.Validate(element.Raw)
 				if result.IsError() {
-					// To avoid nested error messages, if the nested validation returns a
+					// To avoid embedded error messages, if the embedded validation returns a
 					// validationError with a single underlying error, we extract it.
 					// This makes the final error message cleaner.
 					errToAdd := result.Error()
-					if nested, ok := errToAdd.(*validationError); ok && len(nested.errors) == 1 {
+					var nested *validationError
+					if errors.As(errToAdd, &nested) && len(nested.errors) == 1 {
 						for _, v := range nested.errors {
 							errToAdd = v
 						}
@@ -159,7 +183,7 @@ func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 		var values []T
 		node.ForEach(func(index, element gjson.Result) bool {
 			// We need to validate each element of the array.
-			typedVal := typed[T](element)
+			typedVal := typedJson[T](element)
 			if typedVal.IsError() {
 				errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), typedVal.Error())
 				return true // continue to collect all errors
@@ -182,7 +206,7 @@ func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 		return lo.Ternary(errs.err() != nil, mo.Err[any](errs.err()), mo.Ok[any](values))
 	}
 	// --- Fallback for simple, non-array, non-object fields ---
-	typedVal := typed[T](node)
+	typedVal := typedJson[T](node)
 	if typedVal.IsError() {
 		err := fmt.Errorf("field '%s': %w", f.Name(), typedVal.Error())
 		return mo.Err[any](err)
@@ -202,11 +226,11 @@ func overflowError[T any](v T) error {
 	return fmt.Errorf("for type %T: %w", v, constraint.ErrIntegerOverflow)
 }
 
-// typed attempts to convert a gjson.Result into the specified FieldType.
-// It returns a mo.Result[T] which contains the typed value on success,
+// typedJson attempts to convert a gjson.Result into the specified FieldType.
+// It returns a mo.Result[T] which contains the typedJson value on success,
 // or an error if the type conversion fails or the raw type does not match
 // the expected Go type.
-func typed[T constraint.FieldType](res gjson.Result) mo.Result[T] {
+func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 	var zero T
 	targetType := reflect.TypeOf(zero)
 
@@ -223,20 +247,16 @@ func typed[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		if res.Type != gjson.Number {
 			break // Fall through to the default error at the end.
 		}
-		bf, _, err := new(big.Float).Parse(res.Raw, 10)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse number: %w", err))
-		}
-		if !bf.IsInt() {
-			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
-		}
-		// Convert to big.Int to safely check bounds.
-		bi, _ := bf.Int(nil)
-		// Check if the big.Int value fits into a standard int64.
-		if !bi.IsInt64() {
+		// To detect overflow and prevent floats, we get the int value, format it back
+		// to a string, and compare it with the raw input. If they differ, it means
+		// gjson saturated the value (overflow) or truncated a float.
+		val := res.Int()
+		if strconv.FormatInt(val, 10) != res.Raw {
+			if strings.Contains(res.Raw, ".") {
+				return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
+			}
 			return mo.Err[T](overflowError(zero))
 		}
-		val := bi.Int64()
 		// Now check if the int64 value overflows the specific target type (e.g., int8, int16).
 		if reflect.New(targetType).Elem().OverflowInt(val) {
 			return mo.Err[T](overflowError(zero))
@@ -247,24 +267,19 @@ func typed[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		if res.Type != gjson.Number {
 			break
 		}
-		bf, _, err := new(big.Float).Parse(res.Raw, 10)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse number: %w", err))
-		}
 		// Check for negative numbers, which is an overflow for unsigned types.
-		if bf.Sign() < 0 {
+		if strings.Contains(res.Raw, "-") {
 			return mo.Err[T](overflowError(zero))
 		}
-		if !bf.IsInt() {
-			return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to unsigned integer type", constraint.ErrTypeMismatch, res.Raw))
-		}
-		// Convert to big.Int to safely check bounds.
-		bi, _ := bf.Int(nil)
-		// Check if the big.Int value fits into a standard uint64.
-		if !bi.IsUint64() {
+		// Similar to the signed int case, we compare string representations to
+		// detect saturation on overflow or truncation of floats.
+		val := res.Uint()
+		if strconv.FormatUint(val, 10) != res.Raw {
+			if strings.Contains(res.Raw, ".") {
+				return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to unsigned integer type", constraint.ErrTypeMismatch, res.Raw))
+			}
 			return mo.Err[T](overflowError(zero))
 		}
-		val := bi.Uint64()
 		// Now check if the uint64 value overflows the specific target type (e.g., uint8, uint16).
 		if reflect.New(targetType).Elem().OverflowUint(val) {
 			return mo.Err[T](overflowError(zero))
@@ -309,18 +324,78 @@ func typed[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 	return mo.Err[T](fmt.Errorf("%w: expected %T but got raw type %s", constraint.ErrTypeMismatch, zero, res.Type))
 }
 
+// typedString attempts to convert a string into the specified FieldType.
+// It returns a mo.Result[T] which contains the typed value on success,
+// or an error if the type conversion fails or the string cannot be parsed
+// into the expected Go type.
+func typedString[T constraint.FieldType](s string) mo.Result[T] {
+	var zero T
+	targetType := reflect.TypeOf(zero)
+
+	switch targetType.Kind() {
+	case reflect.String:
+		return mo.Ok(any(s).(T))
+	case reflect.Bool:
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return mo.Err[T](fmt.Errorf("could not parse '%s' as bool: %w", s, err))
+		}
+		return mo.Ok(any(b).(T))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		val, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return mo.Err[T](fmt.Errorf("could not parse '%s' as int: %w", s, err))
+		}
+		if reflect.New(targetType).Elem().OverflowInt(val) {
+			return mo.Err[T](overflowError(zero))
+		}
+		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		val, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return mo.Err[T](fmt.Errorf("could not parse '%s' as uint: %w", s, err))
+		}
+		if reflect.New(targetType).Elem().OverflowUint(val) {
+			return mo.Err[T](overflowError(zero))
+		}
+		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
+	case reflect.Float32, reflect.Float64:
+		val, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return mo.Err[T](fmt.Errorf("could not parse '%s' as float: %w", s, err))
+		}
+		if reflect.New(targetType).Elem().OverflowFloat(val) {
+			return mo.Err[T](fmt.Errorf("value %f overflows type %T", val, zero))
+		}
+		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
+	case reflect.Struct:
+		if targetType == reflect.TypeOf(time.Time{}) {
+			layouts := []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
+			for _, layout := range layouts {
+				if t, err := time.Parse(layout, s); err == nil {
+					return mo.Ok(any(t).(T))
+				}
+			}
+			return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", s))
+		}
+		fallthrough
+	default:
+		return mo.Err[T](fmt.Errorf("%w: unsupported type %T for URL parameter", constraint.ErrTypeMismatch, zero))
+	}
+}
+
 type FieldFunc[T constraint.FieldType] func(...constraint.ValidateFunc[T]) *JSONField[T]
 
-// ObjectField creates a slice of ViewField for a nestedObject object.
+// ObjectField creates a slice of ViewField for a embeddedObject object.
 // It takes the name of the object field and a ViewObject representing its schema.
-// Each field in the nestedObject ViewObject will be prefixed with the object's name.
+// Each field in the embeddedObject ViewObject will be prefixed with the object's name.
 // The name of the object field should not contain '#' and `.`.
 func ObjectField(name string, nested *ViewObject) FieldFunc[string] {
 	lo.Assertf(nested != nil, "Nested ViewObject is null for ObjectField %s", name)
 	return trait[string](name, false, true, nested)
 }
 
-// ArrayOfObjectField creates a slice of ViewField for an array of nestedObject objects.
+// ArrayOfObjectField creates a slice of ViewField for an array of embeddedObject objects.
 // It takes the name of the array field and a ViewObject representing the schema of its elements.
 // The name of the array field should not contain '#' and `.`.
 func ArrayOfObjectField(name string, nested *ViewObject) FieldFunc[string] {
@@ -345,7 +420,9 @@ func Field[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T
 }
 
 func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *ViewObject, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
-	assertFieldName(name)
+	if strings.ContainsAny(name, ".#") {
+		panic(fmt.Sprintf("dvo: field name '%s' cannot contain '.' or '#'", name))
+	}
 	return func(fs ...constraint.ValidateFunc[T]) *JSONField[T] {
 		afs := append(vfs, fs...)
 		names := make(map[string]struct{})
@@ -362,16 +439,10 @@ func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *
 			name:       name,
 			array:      isArray,
 			object:     isObject,
-			nested:     nested,
+			embedded:   nested,
 			validators: nf,
 			required:   true,
 		}
-	}
-}
-
-func assertFieldName(name string) {
-	if strings.ContainsAny(name, ".#") {
-		panic(fmt.Sprintf("dvo: field name '%s' cannot contain '.' or '#'", name))
 	}
 }
 
@@ -404,7 +475,7 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 // The seal method prevents implementations outside this package.
 //
 // All getter methods (String, Int, Get, etc.) support dot notation for hierarchical
-// access to nested objects and arrays.
+// access to embedded objects and arrays.
 //
 // For example, given a ValueObject `vo` representing the JSON:
 //
@@ -413,7 +484,7 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 //	  "items": [ { "id": 101 } ]
 //	}
 //
-// You can access nested values like this:
+// You can access embedded values like this:
 //
 //	email := vo.MstString("user.email") // "test@example.com"
 //	itemID := vo.MstInt("items.0.id")   // 101
@@ -598,8 +669,7 @@ func (vo valueObject) seal() {}
 // It returns an Option, which will be empty if the key was not present.
 // It panics if the key exists but the type is incorrect.
 // If the path contains an invalid index for a slice, it will panic. This function
-// supports dot notation for nested objects and array indexing (e.g., "field.0.nestedField").
-
+// supports dot notation for embedded objects and array indexing (e.g., "field.0.nestedField").
 func get[T any](data valueObject, name string) mo.Option[T] {
 	parts := strings.Split(name, ".")
 	var currentValue any = data
@@ -854,35 +924,73 @@ func (vo valueObject) MstTime(name string) time.Time {
 	return vo.Time(name).MustGet()
 }
 
-func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
+func (vo *ViewObject) Validate(json string, urlParams ...map[string]string) mo.Result[ValueObject] {
+	if len(json) > 0 && !gjson.Valid(json) {
+		return mo.Err[ValueObject](fmt.Errorf("invalid json %s", json))
+	}
+	object := valueObject{}
 	errs := &validationError{}
 	// Check for unknown fields first if not allowed.
-	if !vo.allowUnknownFields {
-		definedFields := lo.SliceToMap(vo.fields, func(field ViewField) (string, struct{}) {
-			return field.Name(), struct{}{}
-		})
-		lo.ForEach(gjson.Get(json, "@keys").Array(), func(field gjson.Result, index int) {
-			if _, ok := definedFields[field.String()]; !ok {
-				errs.add(field.String(), fmt.Errorf("unknown field '%s'", field.String()))
+	voFields := lo.SliceToMap(vo.fields, func(field ViewField) (string, bool) {
+		return field.Name(), field.IsArray() || field.IsObject()
+	})
+	urlPair := map[string]string{}
+	for _, pair := range urlParams {
+		for k, v := range pair {
+			// self conflict check
+			if _, ok := urlPair[k]; ok {
+				errs.add(k, fmt.Errorf("duplicated url parameter '%s'", k))
 			}
-		})
+			if !vo.allowUnknownFields {
+				if nested, ok := voFields[k]; !ok {
+					errs.add(k, fmt.Errorf("unknown url parameter '%s'", k))
+				} else if nested {
+					errs.add(k, fmt.Errorf("url parameter '%s' is mapped to a embedded object", k))
+				}
+			}
+			urlPair[k] = v
+		}
 	}
 
-	object := valueObject{}
+	lo.ForEach(gjson.Get(json, "@keys").Array(), func(field gjson.Result, index int) {
+		jsonKey := field.String()
+		if _, ok := urlPair[jsonKey]; ok {
+			errs.add(jsonKey, fmt.Errorf("duplicate parameter in url and json '%s'", jsonKey))
+		}
+		if !vo.allowUnknownFields {
+			if _, ok := voFields[jsonKey]; !ok {
+				errs.add(jsonKey, fmt.Errorf("unknown json field '%s'", jsonKey))
+			}
+		}
+	})
+
+	// fail first for conflict
+	if errs.err() != nil {
+		return mo.Err[ValueObject](errs.err())
+	}
+
 	for _, field := range vo.fields {
+		var rs mo.Result[any]
 		node := gjson.Get(json, field.Name())
 		if !node.Exists() {
-			if field.Required() {
-				errs.add(field.Name(), fmt.Errorf("%s %w", field.Name(), constraint.ErrRequired))
+			// need to check in urlPair
+			urlValue, ok := urlPair[field.Name()]
+			if !ok {
+				if field.Required() {
+					errs.add(field.Name(), fmt.Errorf("%s %w", field.Name(), constraint.ErrRequired))
+				}
+				continue
 			}
-			continue
+			rs = field.validateRaw(urlValue)
+		} else {
+			rs = field.validate(node)
 		}
-		rs := field.validate(node)
 		if rs.IsError() {
 			// If the returned error is a validationError, it likely came from a
-			// nested validation (like an array). We should merge its errors
+			// embedded validation (like an array). We should merge its errors
 			// instead of nesting the error object, which would create ugly, duplicated messages.
-			if nestedErr, ok := rs.Error().(*validationError); ok {
+			var nestedErr *validationError
+			if errors.As(rs.Error(), &nestedErr) {
 				for key, err := range nestedErr.errors {
 					errs.add(key, err)
 				}
@@ -892,6 +1000,15 @@ func (vo *ViewObject) Validate(json string) mo.Result[ValueObject] {
 			continue
 		}
 		object[field.Name()] = rs.MustGet()
+	}
+
+	// Add unknown URL parameters to the final object if allowed.
+	if vo.allowUnknownFields {
+		for k, v := range urlPair {
+			if _, exists := object[k]; !exists {
+				object[k] = v
+			}
+		}
 	}
 	return lo.Ternary(errs.err() != nil, mo.Err[ValueObject](errs.err()), mo.Ok[ValueObject](object))
 }

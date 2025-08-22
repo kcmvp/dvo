@@ -72,7 +72,7 @@ var orderVO = dvo.WithFields(
     dvo.Field[int]("Priority")().Optional(), // This field is not required
     dvo.Field[bool]("Shipped")(),
     // Embed the orderItem schema as an array.
-    dvo.ArrayOfObjectField("Items", orderItem)...,
+	dvo.ArrayOfObjectField("Items", orderItem)(),
 )
 ```
 

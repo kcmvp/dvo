@@ -1,13 +1,12 @@
 package vom
 
 import (
-	"net/http"
 	"sync"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
-	"github.com/tidwall/gjson"
+	"github.com/samber/lo"
 )
 
 // EnrichFunc is a function type that can be used to enrich the validated data
@@ -29,18 +28,32 @@ func SetGlobalEnricher(enrich EnrichFunc) {
 	})
 }
 
+func urlParams(ctx fiber.Ctx) map[string]string {
+	params := lo.Associate(ctx.Route().Params, func(name string) (string, string) {
+		return name, ctx.Params(name)
+	})
+	// Iterate over all query parameters and merge them into the params map.
+	// The logic here enforces two rules:
+	// 1. A query parameter key cannot be a duplicate.
+	// 2. A query parameter key cannot conflict with a path parameter key.
+	ctx.Request().URI().QueryArgs().All()(func(key, value []byte) bool {
+		k := string(key)
+		_, ok := params[k]
+		lo.Assertf(!ok, "path and query parameters have a conflicting name or query parameter is duplicated: '%s'", k)
+		params[k] = string(value)
+		return true
+	})
+	return params
+}
+
 // Bind creates a new fiber middleware to bind and validate the view object.
 // It takes a provider function that returns a new ValueObject for each request.
 func Bind(vo *dvo.ViewObject) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Get a fresh ValueObject instance for this request.
 		body := string(c.Body())
-		if !gjson.Valid(body) {
-			return c.JSON(http.StatusBadRequest, "Invalid JSON")
-		}
 		// The validate method is defined in the internal/core package.
-		result := vo.Validate(body)
-
+		result := vo.Validate(body, urlParams(c))
 		// The validate method is defined in the internal/core package.
 		if result.IsError() {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": result.Error().Error()})
