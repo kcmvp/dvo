@@ -290,10 +290,20 @@ func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
 
 	case reflect.Float32, reflect.Float64:
-		if res.Type != gjson.Number {
+		var val float64
+		var err error
+		if res.Type == gjson.Number {
+			val = res.Float()
+		} else if res.Type == gjson.String {
+			// Explicitly parse string to float, capturing any errors.
+			val, err = strconv.ParseFloat(res.String(), 64)
+			if err != nil {
+				return mo.Err[T](fmt.Errorf("could not parse string '%s' as float: %w", res.String(), err))
+			}
+		} else {
+			// For any other type, fall through to the default type mismatch error.
 			break
 		}
-		val := res.Float()
 		if reflect.New(targetType).Elem().OverflowFloat(val) {
 			return mo.Err[T](fmt.Errorf("value %f overflows type %T", val, zero))
 		}
