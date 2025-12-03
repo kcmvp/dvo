@@ -217,55 +217,55 @@ func TestJSONField_validateRaw(t *testing.T) {
 	}{
 		{
 			name:      "string_success_with_validator",
-			field:     Field[string]("name")(constraint.MinLength(3)),
+			field:     Field[string]("name", constraint.MinLength(3)),
 			input:     "gopher",
 			wantValue: "gopher",
 		},
 		{
 			name:    "string_validation_fail",
-			field:   Field[string]("name")(constraint.MinLength(10)),
+			field:   Field[string]("name", constraint.MinLength(10)),
 			input:   "gopher",
 			wantErr: constraint.ErrLengthMin,
 		},
 		{
 			name:      "int_success_with_validator",
-			field:     Field[int]("age")(constraint.Gt(18)),
+			field:     Field[int]("age", constraint.Gt(18)),
 			input:     "20",
 			wantValue: 20,
 		},
 		{
 			name:    "int_validation_fail",
-			field:   Field[int]("age")(constraint.Gt(18)),
+			field:   Field[int]("age", constraint.Gt(18)),
 			input:   "18",
 			wantErr: constraint.ErrMustGt,
 		},
 		{
 			name:                "int_parsing_fail",
-			field:               Field[int]("age")(),
+			field:               Field[int]("age"),
 			input:               "not-an-age",
 			expectedErrContains: "could not parse 'not-an-age' as int",
 		},
 		{
 			name:      "bool_success",
-			field:     Field[bool]("active")(),
+			field:     Field[bool]("active"),
 			input:     "true",
 			wantValue: true,
 		},
 		{
 			name:                "bool_parsing_fail",
-			field:               Field[bool]("active")(),
+			field:               Field[bool]("active"),
 			input:               "yes",
 			expectedErrContains: "could not parse 'yes' as bool",
 		},
 		{
 			name:      "time_success",
-			field:     Field[time.Time]("createdAt")(),
+			field:     Field[time.Time]("createdAt"),
 			input:     now.Format(time.RFC3339Nano),
 			wantValue: now,
 		},
 		{
 			name:                "time_parsing_fail",
-			field:               Field[time.Time]("createdAt")(),
+			field:               Field[time.Time]("createdAt"),
 			input:               "not-a-time",
 			expectedErrContains: "incorrect date format",
 		},
@@ -901,35 +901,35 @@ func TestViewField_validate(t *testing.T) {
 	}{
 		{
 			name:      "required_field_present_and_valid",
-			field:     Field[string]("name")(),
+			field:     Field[string]("name"),
 			json:      `{"name": "gopher"}`,
 			wantValue: "gopher",
 			wantErr:   nil,
 		},
 		{
 			name:      "required_field_present_but_invalid",
-			field:     Field[string]("name")(constraint.MinLength(10)),
+			field:     Field[string]("name", constraint.MinLength(10)),
 			json:      `{"name": "gopher"}`,
 			wantValue: nil,
 			wantErr:   constraint.ErrLengthMin,
 		},
 		{
 			name:      "optional_field_present_and_valid",
-			field:     Field[string]("name")().Optional(),
+			field:     Field[string]("name").Optional(),
 			json:      `{"name": "gopher"}`,
 			wantValue: "gopher",
 			wantErr:   nil,
 		},
 		{
 			name:      "optional_field_present_but_invalid",
-			field:     Field[string]("name")(constraint.MinLength(10)).Optional(),
+			field:     Field[string]("name", constraint.MinLength(10)).Optional(),
 			json:      `{"name": "gopher"}`,
 			wantValue: nil,
 			wantErr:   constraint.ErrLengthMin,
 		},
 		{
 			name:      "type_mismatch",
-			field:     Field[int]("age")(),
+			field:     Field[int]("age"),
 			json:      `{"age": "not-an-age"}`,
 			wantValue: nil,
 			wantErr:   constraint.ErrTypeMismatch,
@@ -953,32 +953,32 @@ func TestViewField_validate(t *testing.T) {
 func TestWithFields(t *testing.T) {
 	tests := []struct {
 		name        string
-		fields      []ViewField
+		fields      []FieldProvider
 		shouldPanic bool
 	}{
 		{
 			name:        "no fields",
-			fields:      []ViewField{},
+			fields:      []FieldProvider{},
 			shouldPanic: false,
 		},
 		{
 			name:        "one field",
-			fields:      []ViewField{Field[string]("name")()},
+			fields:      []FieldProvider{Field[string]("name")},
 			shouldPanic: false,
 		},
 		{
 			name: "multiple unique fields",
-			fields: []ViewField{
-				Field[string]("name")(),
-				Field[int]("age")(),
+			fields: []FieldProvider{
+				Field[string]("name"),
+				Field[int]("age"),
 			},
 			shouldPanic: false,
 		},
 		{
 			name: "duplicate field name",
-			fields: []ViewField{
-				Field[string]("name")(),
-				Field[int]("name")(),
+			fields: []FieldProvider{
+				Field[string]("name"),
+				Field[int]("name"),
 			},
 			shouldPanic: true,
 		},
@@ -1012,7 +1012,7 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 	}{
 		{
 			name:         "Default behavior: unknown fields not allowed, should error",
-			vo:           WithFields(Field[string]("name")()),
+			vo:           WithFields(Field[string]("name")),
 			json:         `{"name": "gopher", "extra": "field"}`,
 			allowUnknown: false,
 			expectErr:    true,
@@ -1020,7 +1020,7 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 		},
 		{
 			name:          "AllowUnknownFields enabled: unknown fields allowed, should not error",
-			vo:            WithFields(Field[string]("name")()),
+			vo:            WithFields(Field[string]("name")),
 			json:          `{"name": "gopher", "extra": "field"}`,
 			allowUnknown:  true,
 			expectErr:     false,
@@ -1029,21 +1029,21 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 		},
 		{
 			name:         "No unknown fields: should not error (default)",
-			vo:           WithFields(Field[string]("name")()),
+			vo:           WithFields(Field[string]("name")),
 			json:         `{"name": "gopher"}`,
 			allowUnknown: false,
 			expectErr:    false,
 		},
 		{
 			name:         "No unknown fields: should not error (allowed)",
-			vo:           WithFields(Field[string]("name")()),
+			vo:           WithFields(Field[string]("name")),
 			json:         `{"name": "gopher"}`,
 			allowUnknown: true,
 			expectErr:    false,
 		},
 		{
 			name:         "Corner case: empty raw, should not error",
-			vo:           WithFields(Field[string]("name")()),
+			vo:           WithFields(Field[string]("name")),
 			json:         `{}`,
 			allowUnknown: false,
 			expectErr:    true, // required field is missing
@@ -1094,31 +1094,31 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 func TestEndToEnd(t *testing.T) {
 	// Define the ViewObject with various field types and constraints
 	userView := WithFields(
-		Field[string]("name")(constraint.MinLength(3)),
-		Field[int]("age")(constraint.Between(18, 120)),
-		Field[string]("email")(constraint.Email()).Optional(),
-		Field[bool]("isActive")(),
-		Field[time.Time]("createdAt")().Optional(),
-		Field[float64]("rating")(constraint.Between(0.0, 5.0)),
-		Field[string]("department")().Optional(),
-		Field[string]("username")(constraint.CharSetOnly(constraint.LowerCaseChar)),
-		Field[string]("nickname")(), // No validator for 'not contains substring' yet
-		Field[string]("countryCode")(constraint.ExactLength(2)),
-		Field[string]("homepage")(constraint.URL()).Optional(),
-		Field[string]("status")(constraint.OneOf[string]("active", "inactive", "pending")),
-		Field[string]("tags")(constraint.Match(`tag_*`)),
-		Field[float64]("salary")(constraint.Gt(0.0)),
+		Field[string]("name", constraint.MinLength(3)),
+		Field[int]("age", constraint.Between(18, 120)),
+		Field[string]("email", constraint.Email()).Optional(),
+		Field[bool]("isActive"),
+		Field[time.Time]("createdAt").Optional(),
+		Field[float64]("rating", constraint.Between(0.0, 5.0)),
+		Field[string]("department").Optional(),
+		Field[string]("username", constraint.CharSetOnly(constraint.LowerCaseChar)),
+		Field[string]("nickname"), // No validator for 'not contains substring' yet
+		Field[string]("countryCode", constraint.ExactLength(2)),
+		Field[string]("homepage", constraint.URL()).Optional(),
+		Field[string]("status", constraint.OneOf[string]("active", "inactive", "pending")),
+		Field[string]("tags", constraint.Match(`tag_*`)),
+		Field[float64]("salary", constraint.Gt(0.0)),
 		// New fields for all raw types
-		Field[int8]("level")(constraint.Between[int8](1, 100)),
-		Field[int16]("score")(constraint.Gt[int16](0)),
-		Field[int32]("views")(constraint.Gte[int32](0)),
-		Field[int64]("balance")(constraint.Gte[int64](0)),
-		Field[uint]("flags")(),
-		Field[uint8]("version")(),
-		Field[uint16]("build")(),
-		Field[uint32]("instanceId")(),
-		Field[uint64]("nonce")(),
-		Field[float32]("ratio")(constraint.Between[float32](0.0, 1.0)),
+		Field[int8]("level", constraint.Between[int8](1, 100)),
+		Field[int16]("score", constraint.Gt[int16](0)),
+		Field[int32]("views", constraint.Gte[int32](0)),
+		Field[int64]("balance", constraint.Gte[int64](0)),
+		Field[uint]("flags"),
+		Field[uint8]("version"),
+		Field[uint16]("build"),
+		Field[uint32]("instanceId"),
+		Field[uint64]("nonce"),
+		Field[float32]("ratio", constraint.Between[float32](0.0, 1.0)),
 	)
 
 	// Test cases
@@ -1446,13 +1446,13 @@ func TestValueObject_MustMethods(t *testing.T) {
 func TestField_PanicOnInvalidName(t *testing.T) {
 	t.Run("invalid name with dot", func(t *testing.T) {
 		require.PanicsWithValue(t, "dvo: field name 'user.name' cannot contain '.' or '#'", func() {
-			Field[string]("user.name")()
+			Field[string]("user.name")
 		})
 	})
 
 	t.Run("invalid name with hash", func(t *testing.T) {
 		require.PanicsWithValue(t, "dvo: field name 'user#name' cannot contain '.' or '#'", func() {
-			Field[string]("user#name")()
+			Field[string]("user#name")
 		})
 	})
 }
@@ -1460,39 +1460,39 @@ func TestField_PanicOnInvalidName(t *testing.T) {
 func TestField_PanicOnDuplicateValidator(t *testing.T) {
 	t.Run("duplicate validator", func(t *testing.T) {
 		require.PanicsWithValue(t, "dvo: duplicate validator 'min_length' for field 'password'", func() {
-			Field[string]("password")(constraint.MinLength(5), constraint.MinLength(10))
+			Field[string]("password", constraint.MinLength(5), constraint.MinLength(10))
 		})
 	})
 }
 
 func TestNestedValidation(t *testing.T) {
 	userSchema := WithFields(
-		Field[string]("name")(constraint.MinLength(1)),
-		Field[string]("email")(constraint.Email()),
+		Field[string]("name", constraint.MinLength(1)),
+		Field[string]("email", constraint.Email()),
 	)
 
 	supplierSchema := WithFields(
-		Field[string]("id")(),
-		Field[string]("name")(constraint.MinLength(1)),
+		Field[string]("id"),
+		Field[string]("name", constraint.MinLength(1)),
 	)
 
 	itemSchema := WithFields(
-		Field[int]("id")(constraint.Gt(0)),
-		Field[string]("name")(constraint.MinLength(1)),
+		Field[int]("id", constraint.Gt(0)),
+		Field[string]("name", constraint.MinLength(1)),
 		// Add supplier as an optional 3rd level object to not break existing tests
-		ObjectField("supplier", supplierSchema)().Optional(),
+		ObjectField("supplier", supplierSchema).Optional(),
 	)
 
 	requestSchema := WithFields(
-		Field[string]("id")(),
-		ObjectField("user", userSchema)(),
-		ArrayField[string]("tags")(constraint.MinLength(2)),
-		ArrayOfObjectField("items", itemSchema)(),
-		ArrayField[string]("string_array")().Optional(),
-		ArrayField[int]("int_array")().Optional(),
-		ArrayField[int64]("int64_array")().Optional(),
-		ArrayField[float64]("float64_array")().Optional(),
-		ArrayField[bool]("bool_array")().Optional(),
+		Field[string]("id"),
+		ObjectField("user", userSchema),
+		ArrayField[string]("tags", constraint.MinLength(2)),
+		ArrayOfObjectField("items", itemSchema),
+		ArrayField[string]("string_array").Optional(),
+		ArrayField[int]("int_array").Optional(),
+		ArrayField[int64]("int64_array").Optional(),
+		ArrayField[float64]("float64_array").Optional(),
+		ArrayField[bool]("bool_array").Optional(),
 	)
 
 	tests := []struct {
@@ -1663,9 +1663,9 @@ func TestNestedValidation(t *testing.T) {
 func TestViewObject_Validate(t *testing.T) {
 	// Define a base ViewObject for testing various validation scenarios.
 	testVO := WithFields(
-		Field[string]("name")(),
-		Field[int]("id")(),
-		ObjectField("user", WithFields(Field[string]("email")()))().Optional(),
+		Field[string]("name"),
+		Field[int]("id"),
+		ObjectField("user", WithFields(Field[string]("email"))).Optional(),
 	)
 
 	tests := []struct {
@@ -1703,7 +1703,7 @@ func TestViewObject_Validate(t *testing.T) {
 		},
 		{
 			name: "unknown url parameter allowed",
-			vo:   WithFields(Field[string]("name")()).AllowUnknownFields(),
+			vo:   WithFields(Field[string]("name")).AllowUnknownFields(),
 			json: `{"name":"gopher"}`,
 			urlParams: []map[string]string{
 				{"extra": "param"},

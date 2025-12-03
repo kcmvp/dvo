@@ -22,18 +22,18 @@ import (
 
 // 1. Define the dynamic view object using the dvo API with validation rules.
 var orderVO = dvo.WithFields(
-	dvo.Field[string]("OrderID")(),                            // From JSON body
-	dvo.Field[string]("CustomerID")(),                         // From JSON body
-	dvo.Field[time.Time]("OrderDate")(),                       // From JSON body
-	dvo.Field[float64]("Amount", constraint.Gt[float64](0))(), // From JSON body
-	dvo.Field[int]("Priority")().Optional(),                   // From JSON body
-	dvo.Field[bool]("Shipped")(),                              // From JSON body
-	dvo.Field[string]("ordId")().Optional(),                   // From path parameter
-	dvo.Field[string]("source")().Optional(),                  // From query parameter
-	dvo.Field[int]("limit")().Optional(),                      // From query parameter
-	dvo.Field[time.Time]("registered_date")().Optional(),      // From query parameter
-	dvo.Field[bool]("received")().Optional(),                  // From query parameter
-	dvo.Field[float64]("minim_price")().Optional(),            // From query parameter
+	dvo.Field[string]("OrderID"),                            // From JSON body
+	dvo.Field[string]("CustomerID"),                         // From JSON body
+	dvo.Field[time.Time]("OrderDate"),                       // From JSON body
+	dvo.Field[float64]("Amount", constraint.Gt[float64](0)), // From JSON body
+	dvo.Field[int]("Priority").Optional(),                   // From JSON body
+	dvo.Field[bool]("Shipped"),                              // From JSON body
+	dvo.Field[string]("ordId").Optional(),                   // From path parameter
+	dvo.Field[string]("source").Optional(),                  // From query parameter
+	dvo.Field[int]("limit").Optional(),                      // From query parameter
+	dvo.Field[time.Time]("registered_date").Optional(),      // From query parameter
+	dvo.Field[bool]("received").Optional(),                  // From query parameter
+	dvo.Field[float64]("minim_price").Optional(),            // From query parameter
 )
 
 type MiddlewareTestSuite struct {
@@ -212,8 +212,8 @@ func (suite *MiddlewareTestSuite) TestBindingWithParamsAndEnricher() {
 func TestPanicOnDuplicateQueryParam(t *testing.T) {
 	// 1. Define the ViewObject needed for this test
 	vo := dvo.WithFields(
-		dvo.Field[string]("ordId")(),
-		dvo.Field[string]("source")(),
+		dvo.Field[string]("ordId"),
+		dvo.Field[string]("source"),
 	)
 
 	// 2. Create a new, isolated Fiber app and register the route

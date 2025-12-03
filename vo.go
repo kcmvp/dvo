@@ -83,6 +83,10 @@ type JSONField[T constraint.FieldType] struct {
 	validators []constraint.Validator[T]
 }
 
+func (f *JSONField[T]) toViewField() ViewField {
+	return f
+}
+
 func (f *JSONField[T]) Required() bool {
 	return f.required
 }
@@ -100,6 +104,7 @@ func (f *JSONField[T]) embeddedObject() mo.Option[*ViewObject] {
 }
 
 var _ ViewField = (*JSONField[string])(nil)
+var _ FieldProvider = (*JSONField[string])(nil)
 
 func (f *JSONField[T]) Name() string {
 	return f.name
@@ -390,13 +395,17 @@ func typedString[T constraint.FieldType](s string) mo.Result[T] {
 	}
 }
 
-type FieldFunc[T constraint.FieldType] func(...constraint.ValidateFunc[T]) *JSONField[T]
+// FieldProvider is an interface for any type that can provide a ViewField.
+// It's used to create a type-safe and unified API for WithFields.
+type FieldProvider interface {
+	toViewField() ViewField
+}
 
 // ObjectField creates a slice of ViewField for a embeddedObject object.
 // It takes the name of the object field and a ViewObject representing its schema.
 // Each field in the embeddedObject ViewObject will be prefixed with the object's name.
 // The name of the object field should not contain '#' and `.`.
-func ObjectField(name string, nested *ViewObject) FieldFunc[string] {
+func ObjectField(name string, nested *ViewObject) *JSONField[string] {
 	lo.Assertf(nested != nil, "Nested ViewObject is null for ObjectField %s", name)
 	return trait[string](name, false, true, nested)
 }
@@ -404,7 +413,7 @@ func ObjectField(name string, nested *ViewObject) FieldFunc[string] {
 // ArrayOfObjectField creates a slice of ViewField for an array of embeddedObject objects.
 // It takes the name of the array field and a ViewObject representing the schema of its elements.
 // The name of the array field should not contain '#' and `.`.
-func ArrayOfObjectField(name string, nested *ViewObject) FieldFunc[string] {
+func ArrayOfObjectField(name string, nested *ViewObject) *JSONField[string] {
 	lo.Assertf(nested != nil, "Nested ViewObject is null for ArrayOfObjectField %s", name)
 	return trait[string](name, true, true, nested)
 }
@@ -412,8 +421,8 @@ func ArrayOfObjectField(name string, nested *ViewObject) FieldFunc[string] {
 // ArrayField creates a FieldFunc for an array field.
 // It is intended to be used for array fields that contain primitive types.
 // The name of the array field should not contain '#' and `.`.
-func ArrayField[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
-	return trait(name, true, false, nil, vfs...)
+func ArrayField[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
+	return trait[T](name, true, false, nil, vfs...)
 }
 
 // Field creates a FieldFunc for a single field.
@@ -421,34 +430,31 @@ func ArrayField[T constraint.FieldType](name string, vfs ...constraint.ValidateF
 // The returned FieldFunc can then be used to create a JSONField,
 // allowing for additional validators to be chained.
 // The name of the field should not contain '#' and `.`.
-func Field[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
-	return trait(name, false, false, nil, vfs...)
+func Field[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
+	return trait[T](name, false, false, nil, vfs...)
 }
 
-func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *ViewObject, vfs ...constraint.ValidateFunc[T]) FieldFunc[T] {
+func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *ViewObject, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
 	if strings.ContainsAny(name, ".#") {
 		panic(fmt.Sprintf("dvo: field name '%s' cannot contain '.' or '#'", name))
 	}
-	return func(fs ...constraint.ValidateFunc[T]) *JSONField[T] {
-		afs := append(vfs, fs...)
-		names := make(map[string]struct{})
-		var nf []constraint.Validator[T]
-		for _, v := range afs {
-			n, f := v()
-			if _, exists := names[n]; exists {
-				panic(fmt.Sprintf("dvo: duplicate validator '%s' for field '%s'", n, name))
-			}
-			names[n] = struct{}{}
-			nf = append(nf, f)
+	names := make(map[string]struct{})
+	var nf []constraint.Validator[T]
+	for _, v := range vfs {
+		n, f := v()
+		if _, exists := names[n]; exists {
+			panic(fmt.Sprintf("dvo: duplicate validator '%s' for field '%s'", n, name))
 		}
-		return &JSONField[T]{
-			name:       name,
-			array:      isArray,
-			object:     isObject,
-			embedded:   nested,
-			validators: nf,
-			required:   true,
-		}
+		names[n] = struct{}{}
+		nf = append(nf, f)
+	}
+	return &JSONField[T]{
+		name:       name,
+		array:      isArray,
+		object:     isObject,
+		embedded:   nested,
+		validators: nf,
+		required:   true,
 	}
 }
 
@@ -458,8 +464,13 @@ type ViewObject struct {
 	allowUnknownFields bool
 }
 
-// WithFields is the constructor for a ViewObject blueprint.
-func WithFields(fields ...ViewField) *ViewObject {
+// WithFields is the new constructor for a ViewObject blueprint that accepts FieldProvider.
+// This allows for a more fluent and type-safe API.
+func WithFields(providers ...FieldProvider) *ViewObject {
+	fields := make([]ViewField, len(providers))
+	for i, p := range providers {
+		fields[i] = p.toViewField()
+	}
 	names := make(map[string]struct{})
 	for _, f := range fields {
 		if _, exists := names[f.Name()]; exists {
