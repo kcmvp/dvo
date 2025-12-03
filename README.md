@@ -56,23 +56,23 @@ import (
 
 // 1. Define a schema for a single item within an order.
 var orderItem = dvo.WithFields(
-    dvo.Field[string]("ProductID", constraint.MinLength(1))(),
-    dvo.Field[string]("ProductName", constraint.MinLength(1))(),
-    dvo.Field[int]("Quantity", constraint.Gt(0))(),
-    dvo.Field[float64]("Price", constraint.Gt(0.0))(),
+    dvo.Field[string]("ProductID", constraint.MinLength(1)),
+    dvo.Field[string]("ProductName", constraint.MinLength(1)),
+    dvo.Field[int]("Quantity", constraint.Gt(0)),
+    dvo.Field[float64]("Price", constraint.Gt(0.0)),
 )
 
 // 2. Define the main order schema, embedding an array of order items.
 // This schema is reusable and can be passed to the validation middleware.
 var orderVO = dvo.WithFields(
-    dvo.Field[string]("OrderID")(),
-    dvo.Field[string]("CustomerID")(),
-    dvo.Field[time.Time]("OrderDate")(),
-    dvo.Field[float64]("Amount", constraint.Gt[float64](0))(),
-    dvo.Field[int]("Priority")().Optional(), // This field is not required
-    dvo.Field[bool]("Shipped")(),
+    dvo.Field[string]("OrderID"),
+    dvo.Field[string]("CustomerID"),
+    dvo.Field[time.Time]("OrderDate"),
+    dvo.Field[float64]("Amount", constraint.Gt[float64](0)),
+    dvo.Field[int]("Priority").Optional(), // This field is not required
+    dvo.Field[bool]("Shipped"),
     // Embed the orderItem schema as an array.
-	dvo.ArrayOfObjectField("Items", orderItem)(),
+	dvo.ArrayOfObjectField("Items", orderItem),
 )
 ```
 
@@ -93,13 +93,13 @@ var profileVO = dvo.WithFields(
     dvo.Field[string]("username",
         constraint.MinLength(3),
         constraint.MaxLength(50),
-    )(),
+    ),
 
     // Apply Gt (Greater Than) to the 'age' field.
-    dvo.Field[int]("age", constraint.Gt(18))(),
+    dvo.Field[int]("age", constraint.Gt(18)),
 
     // Validate that a value is one of the allowed options.
-    dvo.Field[string]("role", constraint.OneOf("admin", "member", "guest"))(),
+    dvo.Field[string]("role", constraint.OneOf("admin", "member", "guest")),
 )
 ```
 
@@ -138,14 +138,14 @@ Use `ObjectField` to define a schema for a nested JSON object. You create a sepa
 ```go
 // 1. Define the schema for the nested 'user' object.
 var userSchema = dvo.WithFields(
-    dvo.Field[string]("name")(),
+    dvo.Field[string]("name"),
     dvo.Field[string]("email", constraint.Email()),
 )
 
 // 2. Embed the user schema into the main request schema.
 var requestSchema = dvo.WithFields(
-    dvo.Field[string]("id")(),
-    dvo.ObjectField("user", userSchema)..., // Note the spread operator (...)
+    dvo.Field[string]("id"),
+    dvo.ObjectField("user", userSchema),
 )
 ```
 
@@ -155,8 +155,8 @@ Use `ArrayField` to validate an array of simple types like `string`, `int`, or `
 
 ```go
 var postSchema = dvo.WithFields(
-    dvo.Field[string]("title")(),
-    dvo.ArrayField[string]("tags")(),
+    dvo.Field[string]("title"),
+    dvo.ArrayField[string]("tags"),
 )
 ```
 
@@ -167,16 +167,16 @@ Use `ArrayOfObjectField` to validate an array where each element is a complex ob
 ```go
 // 1. Define the schema for a single order item with multiple constraints.
 var orderItemSchema = dvo.WithFields(
-    dvo.Field[int]("id", constraint.Gt(0))(),
-    dvo.Field[string]("name", constraint.MinLength(1))(),
-    dvo.Field[int]("quantity", constraint.Gt(0))(),
-    dvo.Field[float64]("price", constraint.Gt(0.0))(),
+    dvo.Field[int]("id", constraint.Gt(0)),
+    dvo.Field[string]("name", constraint.MinLength(1)),
+    dvo.Field[int]("quantity", constraint.Gt(0)),
+    dvo.Field[float64]("price", constraint.Gt(0.0)),
 )
 
 // 2. Use ArrayOfObjectField in the parent schema.
 var orderWithItemsSchema = dvo.WithFields(
-    dvo.Field[string]("orderId")(),
-    dvo.ArrayOfObjectField("orderItems", orderItemSchema)...,
+    dvo.Field[string]("orderId"),
+    dvo.ArrayOfObjectField("orderItems", orderItemSchema),
 )
 ```
 
@@ -195,23 +195,23 @@ import (
 
 // 1. Define a schema for a single item within an order.
 var orderItem = dvo.WithFields(
-    dvo.Field[string]("ProductID", constraint.MinLength(1))(),
-    dvo.Field[string]("ProductName", constraint.MinLength(1))(),
-    dvo.Field[int]("Quantity", constraint.Gt(0))(),
-    dvo.Field[float64]("Price", constraint.Gt(0.0))(),
+    dvo.Field[string]("ProductID", constraint.MinLength(1)),
+    dvo.Field[string]("ProductName", constraint.MinLength(1)),
+    dvo.Field[int]("Quantity", constraint.Gt(0)),
+    dvo.Field[float64]("Price", constraint.Gt(0.0)),
 )
 
 // 2. Define the main order schema, embedding an array of order items.
 // This schema is reusable and can be passed to the validation middleware.
 var orderVO = dvo.WithFields(
-    dvo.Field[string]("OrderID")(),
-    dvo.Field[string]("CustomerID")(),
-    dvo.Field[time.Time]("OrderDate")(),
-    dvo.Field[float64]("Amount", constraint.Gt[float64](0))(),
-    dvo.Field[int]("Priority")().Optional(), // This field is not required
-    dvo.Field[bool]("Shipped")(),
+    dvo.Field[string]("OrderID"),
+    dvo.Field[string]("CustomerID"),
+    dvo.Field[time.Time]("OrderDate"),
+    dvo.Field[float64]("Amount", constraint.Gt[float64](0)),
+    dvo.Field[int]("Priority").Optional(), // This field is not required
+    dvo.Field[bool]("Shipped"),
     // Embed the orderItem schema as an array.
-    dvo.ArrayOfObjectField("Items", orderItem)...,
+    dvo.ArrayOfObjectField("Items", orderItem),
 )
 ```
 
