@@ -488,6 +488,31 @@ func (vo *ViewObject) AllowUnknownFields() *ViewObject {
 	return vo
 }
 
+func (vo *ViewObject) Extend(another *ViewObject) *ViewObject {
+	// 1. Create a new field slice with enough capacity.
+	newFields := make([]ViewField, 0, len(vo.fields)+len(another.fields))
+
+	// 2. Copy fields from both ViewObjects.
+	newFields = append(newFields, vo.fields...)
+	newFields = append(newFields, another.fields...)
+
+	// 3. Perform strict duplicate checking.
+	names := make(map[string]struct{})
+	for _, f := range newFields {
+		if _, exists := names[f.Name()]; exists {
+			panic(fmt.Sprintf("dvo: duplicate field name '%s' found during Extend", f.Name()))
+		}
+		names[f.Name()] = struct{}{}
+	}
+
+	// 4. Return a new ViewObject with the combined fields.
+	// If either of the original objects allowed unknown fields, the new one should too.
+	return &ViewObject{
+		fields:             newFields,
+		allowUnknownFields: vo.allowUnknownFields || another.allowUnknownFields,
+	}
+}
+
 // ValueObject is a sealed interface for a type-safe map holding validated ViewObject.
 // The seal method prevents implementations outside this package.
 //

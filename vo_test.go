@@ -1769,3 +1769,62 @@ func TestViewObject_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestViewObject_Extend(t *testing.T) {
+	baseSchema := WithFields(
+		Field[string]("id"),
+		Field[time.Time]("createdAt"),
+	)
+
+	userSpecificSchema := WithFields(
+		Field[string]("name"),
+		Field[string]("email"),
+	)
+
+	t.Run("successful extend", func(t *testing.T) {
+		userSchema := baseSchema.Extend(userSpecificSchema)
+		require.Len(t, userSchema.fields, 4)
+
+		// Verify all fields are present
+		fieldNames := make(map[string]bool)
+		for _, f := range userSchema.fields {
+			fieldNames[f.Name()] = true
+		}
+		require.True(t, fieldNames["id"])
+		require.True(t, fieldNames["createdAt"])
+		require.True(t, fieldNames["name"])
+		require.True(t, fieldNames["email"])
+	})
+
+	t.Run("panic on duplicate field", func(t *testing.T) {
+		conflictingSchema := WithFields(
+			Field[string]("id"), // Duplicate field
+		)
+		require.PanicsWithValue(t, "dvo: duplicate field name 'id' found during Extend", func() {
+			baseSchema.Extend(conflictingSchema)
+		})
+	})
+
+	t.Run("extend with empty schema", func(t *testing.T) {
+		emptySchema := WithFields()
+		extended := baseSchema.Extend(emptySchema)
+		require.Len(t, extended.fields, 2)
+		require.Equal(t, baseSchema.fields, extended.fields)
+
+		extendedFromEmpty := emptySchema.Extend(baseSchema)
+		require.Len(t, extendedFromEmpty.fields, 2)
+		require.Equal(t, baseSchema.fields, extendedFromEmpty.fields)
+	})
+
+	t.Run("allow unknown fields propagation", func(t *testing.T) {
+		schemaA := WithFields(Field[string]("a"))
+		schemaB := WithFields(Field[string]("b")).AllowUnknownFields()
+		schemaC := WithFields(Field[string]("c"))
+
+		ab := schemaA.Extend(schemaB)
+		require.True(t, ab.allowUnknownFields)
+
+		ac := schemaA.Extend(schemaC)
+		require.False(t, ac.allowUnknownFields)
+	})
+}
