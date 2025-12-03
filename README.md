@@ -149,6 +149,18 @@ var requestSchema = dvo.WithFields(
 )
 ```
 
+The `requestSchema` will validate a JSON structure like this:
+
+```json
+{
+  "id": "req-123",
+  "user": {
+    "name": "John Doe",
+    "email": "john.doe@example.com"
+  }
+}
+```
+
 ### Arrays of Primitives
 
 Use `ArrayField` to validate an array of simple types like `string`, `int`, or `bool`.
@@ -158,6 +170,15 @@ var postSchema = dvo.WithFields(
     dvo.Field[string]("title"),
     dvo.ArrayField[string]("tags"),
 )
+```
+
+The `postSchema` will validate a JSON structure like this:
+
+```json
+{
+  "title": "My First Post",
+  "tags": ["go", "dvo", "validation"]
+}
 ```
 
 ### Arrays of Objects
@@ -178,6 +199,64 @@ var orderWithItemsSchema = dvo.WithFields(
     dvo.Field[string]("orderId"),
     dvo.ArrayOfObjectField("orderItems", orderItemSchema),
 )
+```
+
+The `orderWithItemsSchema` will validate a JSON structure like this:
+
+```json
+{
+  "orderId": "ord-456",
+  "orderItems": [
+    {
+      "id": 1,
+      "name": "Laptop",
+      "quantity": 1,
+      "price": 1200.50
+    },
+    {
+      "id": 2,
+      "name": "Mouse",
+      "quantity": 2,
+      "price": 25.00
+    }
+  ]
+}
+```
+
+### Extend ViewObject
+
+To promote reusability, you can define a base `ViewObject` with common fields and then `Extend` it to create more specific schemas. This is perfect for things like `id`, `createdAt`, and `updatedAt` fields.
+
+The `Extend` method creates a new `ViewObject` containing a flattened combination of fields from both objects. It will panic if a duplicate field name is found.
+
+```go
+// 1. Define a base schema with common, reusable fields.
+var baseSchema = dvo.WithFields(
+    dvo.Field[string]("id", constraint.UUID),
+    dvo.Field[time.Time]("createdAt"),
+    dvo.Field[time.Time]("updatedAt"),
+)
+
+// 2. Define a schema with only user-specific fields.
+var userSpecificSchema = dvo.WithFields(
+    dvo.Field[string]("name", constraint.MinLength(1)),
+    dvo.Field[string]("email", constraint.Email()),
+)
+
+// 3. Combine them into a final, complete schema.
+var userSchema = baseSchema.Extend(userSpecificSchema)
+```
+
+The resulting `userSchema` will validate a flat JSON structure like this:
+
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "createdAt": "2023-10-27T10:00:00Z",
+  "updatedAt": "2023-10-27T10:00:00Z",
+  "name": "John Doe",
+  "email": "john.doe@example.com"
+}
 ```
 
 ## Usage with Web Frameworks
