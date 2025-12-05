@@ -50,8 +50,8 @@ func urlParams(ctx echo.Context) map[string]string {
 }
 
 // Bind returns an Echo middleware function that validates incoming JSON request bodies
-// against the provided dvo.ViewObject schema.
-func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
+// against the provided dvo.Schema schema.
+func Bind(schema *dvo.Schema) echo.MiddlewareFunc {
 	// The returned function is the actual middleware that will be executed for each request.
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		// This is the handler function that Echo will call.
@@ -64,8 +64,8 @@ func Bind(vo *dvo.ViewObject) echo.MiddlewareFunc {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to read request body"})
 			}
 			body := string(btsResult.MustGet())
-			// validate the JSON body against the ViewObject schema.
-			result := vo.Validate(body, urlParams(c))
+			// validate the JSON body against the Schema schema.
+			result := schema.Validate(body, urlParams(c))
 			if result.IsError() {
 				// If validation fails, return a 400 Bad Request with a structured error message
 				// containing the details of the validation failures.

@@ -40,11 +40,11 @@ func urlParams(ctx *gin.Context) map[string]string {
 	return params
 }
 
-// Bind creates a Gin middleware that validates the request body against a dvo.ViewObject.
+// Bind creates a Gin middleware that validates the request body against a dvo.Schema.
 // If validation is successful, the validated data is stored in the request context.
 // If validation fails, it aborts the request with a 400 Bad Request status and an error message.
 // It also allows for enriching the validated data using a previously set EnrichFunc function.
-func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
+func Bind(schema *dvo.Schema) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Get a fresh ValueObject instance for this request.
 		bts := mo.TupleToResult[[]byte](io.ReadAll(ctx.Request.Body))
@@ -53,7 +53,7 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 			return
 		}
 		body := string(bts.MustGet())
-		result := vo.Validate(body, urlParams(ctx))
+		result := schema.Validate(body, urlParams(ctx))
 		if result.IsError() {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": result.Error().Error()})
 			return
@@ -73,7 +73,7 @@ func Bind(vo *dvo.ViewObject) gin.HandlerFunc {
 	}
 }
 
-// ValueObject retrieves the validated ViewObject from the gin context.
+// ValueObject retrieves the validated ValueObject from the gin context.
 // It returns nil if the object is not found.
 func ValueObject(c *gin.Context) dvo.ValueObject {
 	if val := c.Request.Context().Value(internal.ViewObjectKey); val != nil {
