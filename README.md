@@ -45,7 +45,7 @@ stateDiagram-v2
     }
 
     state "DVO Inbound" as dvo {
-        V: Schema\nValueObject
+        V: Schema \n ValueObject
     }
 
     state "Application Layer" as app {
