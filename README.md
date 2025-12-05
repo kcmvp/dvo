@@ -67,7 +67,7 @@ stateDiagram-v2
     W --> S : 6. Business Logic
     S --> A : 7. Response(json)
 
-    classDef dvoStyle stroke:cyan,stroke-width:4px
+    classDef dvoStyle stroke:cyan,stroke-width:2px
     class dvo dvoStyle
     class outbound dvoStyle
 ```
