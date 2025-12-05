@@ -45,7 +45,7 @@ stateDiagram-v2
     }
 
     state "DVO Inbound" as dvo {
-        V: Schema \n ValueObject
+        V: "Schema\nValueObject"
     }
 
     state "Application Layer" as app {
@@ -57,7 +57,7 @@ stateDiagram-v2
     }
     
     state "DVO Wrapper" as outbound {
-        W: ValueObject\nEntity
+        W: "ValueObject\nEntity"
     }
 
     A --> V : 1. Untrusted(json)
