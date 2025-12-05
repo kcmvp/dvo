@@ -46,14 +46,14 @@ func urlParams(ctx fiber.Ctx) map[string]string {
 	return params
 }
 
-// Bind creates a new fiber middleware to bind and validate the view object.
-// It takes a provider function that returns a new ValueObject for each request.
-func Bind(vo *dvo.ViewObject) fiber.Handler {
+// Bind creates a new fiber middleware to bind and validate the schema.
+// It takes a provider function that returns a new Schema for each request.
+func Bind(schema *dvo.Schema) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Get a fresh ValueObject instance for this request.
+		// Get a fresh Schema instance for this request.
 		body := string(c.Body())
 		// The validate method is defined in the internal/core package.
-		result := vo.Validate(body, urlParams(c))
+		result := schema.Validate(body, urlParams(c))
 		// The validate method is defined in the internal/core package.
 		if result.IsError() {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": result.Error().Error()})
@@ -70,7 +70,7 @@ func Bind(vo *dvo.ViewObject) fiber.Handler {
 	}
 }
 
-// ValueObject retrieves the validated ViewObject from the fiber context.
+// ValueObject retrieves the validated dvo.ValueObject from the fiber context.
 // It returns nil if the object is not found.
 func ValueObject(c fiber.Ctx) dvo.ValueObject {
 	if val := c.Locals(internal.ViewObjectKey); val != nil {

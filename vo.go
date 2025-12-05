@@ -62,16 +62,16 @@ func (e *validationError) err() error {
 	return e
 }
 
-// ViewField is an internal, non-generic interface that allows ViewObject
+// SchemaField is an internal, non-generic interface that allows Schema
 // to hold a collection of fields with different underlying generic types.
-type ViewField interface {
+type SchemaField interface {
 	Name() string
 	IsArray() bool
 	IsObject() bool
 	Required() bool
 	validate(node gjson.Result) mo.Result[any]
 	validateRaw(v string) mo.Result[any]
-	embeddedObject() mo.Option[*ViewObject]
+	embeddedObject() mo.Option[*Schema]
 }
 
 type JSONField[T constraint.FieldType] struct {
@@ -79,11 +79,11 @@ type JSONField[T constraint.FieldType] struct {
 	required   bool
 	array      bool
 	object     bool
-	embedded   *ViewObject
+	embedded   *Schema
 	validators []constraint.Validator[T]
 }
 
-func (f *JSONField[T]) toViewField() ViewField {
+func (f *JSONField[T]) toViewField() SchemaField {
 	return f
 }
 
@@ -99,11 +99,11 @@ func (f *JSONField[T]) IsObject() bool {
 	return f.object
 }
 
-func (f *JSONField[T]) embeddedObject() mo.Option[*ViewObject] {
-	return lo.Ternary(f.embedded == nil, mo.None[*ViewObject](), mo.Some(f.embedded))
+func (f *JSONField[T]) embeddedObject() mo.Option[*Schema] {
+	return lo.Ternary(f.embedded == nil, mo.None[*Schema](), mo.Some(f.embedded))
 }
 
-var _ ViewField = (*JSONField[string])(nil)
+var _ SchemaField = (*JSONField[string])(nil)
 var _ FieldProvider = (*JSONField[string])(nil)
 
 func (f *JSONField[T]) Name() string {
@@ -395,26 +395,26 @@ func typedString[T constraint.FieldType](s string) mo.Result[T] {
 	}
 }
 
-// FieldProvider is an interface for any type that can provide a ViewField.
+// FieldProvider is an interface for any type that can provide a SchemaField.
 // It's used to create a type-safe and unified API for WithFields.
 type FieldProvider interface {
-	toViewField() ViewField
+	toViewField() SchemaField
 }
 
-// ObjectField creates a slice of ViewField for a embeddedObject object.
-// It takes the name of the object field and a ViewObject representing its schema.
-// Each field in the embeddedObject ViewObject will be prefixed with the object's name.
+// ObjectField creates a slice of SchemaField for a embeddedObject object.
+// It takes the name of the object field and a Schema representing its schema.
+// Each field in the embeddedObject Schema will be prefixed with the object's name.
 // The name of the object field should not contain '#' and `.`.
-func ObjectField(name string, nested *ViewObject) *JSONField[string] {
-	lo.Assertf(nested != nil, "Nested ViewObject is null for ObjectField %s", name)
+func ObjectField(name string, nested *Schema) *JSONField[string] {
+	lo.Assertf(nested != nil, "Nested Schema is null for ObjectField %s", name)
 	return trait[string](name, false, true, nested)
 }
 
-// ArrayOfObjectField creates a slice of ViewField for an array of embeddedObject objects.
-// It takes the name of the array field and a ViewObject representing the schema of its elements.
+// ArrayOfObjectField creates a slice of SchemaField for an array of embeddedObject objects.
+// It takes the name of the array field and a Schema representing the schema of its elements.
 // The name of the array field should not contain '#' and `.`.
-func ArrayOfObjectField(name string, nested *ViewObject) *JSONField[string] {
-	lo.Assertf(nested != nil, "Nested ViewObject is null for ArrayOfObjectField %s", name)
+func ArrayOfObjectField(name string, nested *Schema) *JSONField[string] {
+	lo.Assertf(nested != nil, "Nested Schema is null for ArrayOfObjectField %s", name)
 	return trait[string](name, true, true, nested)
 }
 
@@ -434,7 +434,7 @@ func Field[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T
 	return trait[T](name, false, false, nil, vfs...)
 }
 
-func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *ViewObject, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
+func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *Schema, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
 	if strings.ContainsAny(name, ".#") {
 		panic(fmt.Sprintf("dvo: field name '%s' cannot contain '.' or '#'", name))
 	}
@@ -458,42 +458,42 @@ func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *
 	}
 }
 
-// ViewObject is a blueprint for validating a raw object.
-type ViewObject struct {
-	fields             []ViewField
+// Schema is a blueprint for validating a raw object.
+type Schema struct {
+	fields             []SchemaField
 	allowUnknownFields bool
 }
 
-// WithFields is the new constructor for a ViewObject blueprint that accepts FieldProvider.
+// WithFields is the new constructor for a Schema blueprint that accepts FieldProvider.
 // This allows for a more fluent and type-safe API.
-func WithFields(providers ...FieldProvider) *ViewObject {
-	fields := make([]ViewField, len(providers))
+func WithFields(providers ...FieldProvider) *Schema {
+	fields := make([]SchemaField, len(providers))
 	for i, p := range providers {
 		fields[i] = p.toViewField()
 	}
 	names := make(map[string]struct{})
 	for _, f := range fields {
 		if _, exists := names[f.Name()]; exists {
-			panic(fmt.Sprintf("dvo: duplicate field name '%s' in ViewObject definition", f.Name()))
+			panic(fmt.Sprintf("dvo: duplicate field name '%s' in Schema definition", f.Name()))
 		}
 		names[f.Name()] = struct{}{}
 	}
-	return &ViewObject{fields: fields, allowUnknownFields: false}
+	return &Schema{fields: fields, allowUnknownFields: false}
 }
 
-// AllowUnknownFields is a fluent method to make the ViewObject accept raw
+// AllowUnknownFields is a fluent method to make the Schema accept raw
 // that contains fields not defined in the schema. Default behavior is to disallow.
-func (vo *ViewObject) AllowUnknownFields() *ViewObject {
-	vo.allowUnknownFields = true
-	return vo
+func (s *Schema) AllowUnknownFields() *Schema {
+	s.allowUnknownFields = true
+	return s
 }
 
-func (vo *ViewObject) Extend(another *ViewObject) *ViewObject {
+func (s *Schema) Extend(another *Schema) *Schema {
 	// 1. Create a new field slice with enough capacity.
-	newFields := make([]ViewField, 0, len(vo.fields)+len(another.fields))
+	newFields := make([]SchemaField, 0, len(s.fields)+len(another.fields))
 
-	// 2. Copy fields from both ViewObjects.
-	newFields = append(newFields, vo.fields...)
+	// 2. Copy fields from both Schemas.
+	newFields = append(newFields, s.fields...)
 	newFields = append(newFields, another.fields...)
 
 	// 3. Perform strict duplicate checking.
@@ -505,15 +505,15 @@ func (vo *ViewObject) Extend(another *ViewObject) *ViewObject {
 		names[f.Name()] = struct{}{}
 	}
 
-	// 4. Return a new ViewObject with the combined fields.
+	// 4. Return a new Schema with the combined fields.
 	// If either of the original objects allowed unknown fields, the new one should too.
-	return &ViewObject{
+	return &Schema{
 		fields:             newFields,
-		allowUnknownFields: vo.allowUnknownFields || another.allowUnknownFields,
+		allowUnknownFields: s.allowUnknownFields || another.allowUnknownFields,
 	}
 }
 
-// ValueObject is a sealed interface for a type-safe map holding validated ViewObject.
+// ValueObject is a sealed interface for a type-safe map holding validated Schema.
 // The seal method prevents implementations outside this package.
 //
 // All getter methods (String, Int, Get, etc.) support dot notation for hierarchical
@@ -966,14 +966,14 @@ func (vo valueObject) MstTime(name string) time.Time {
 	return vo.Time(name).MustGet()
 }
 
-func (vo *ViewObject) Validate(json string, urlParams ...map[string]string) mo.Result[ValueObject] {
+func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result[ValueObject] {
 	if len(json) > 0 && !gjson.Valid(json) {
 		return mo.Err[ValueObject](fmt.Errorf("invalid json %s", json))
 	}
 	object := valueObject{}
 	errs := &validationError{}
 	// Check for unknown fields first if not allowed.
-	voFields := lo.SliceToMap(vo.fields, func(field ViewField) (string, bool) {
+	voFields := lo.SliceToMap(s.fields, func(field SchemaField) (string, bool) {
 		return field.Name(), field.IsArray() || field.IsObject()
 	})
 	urlPair := map[string]string{}
@@ -983,7 +983,7 @@ func (vo *ViewObject) Validate(json string, urlParams ...map[string]string) mo.R
 			if _, ok := urlPair[k]; ok {
 				errs.add(k, fmt.Errorf("duplicated url parameter '%s'", k))
 			}
-			if !vo.allowUnknownFields {
+			if !s.allowUnknownFields {
 				if nested, ok := voFields[k]; !ok {
 					errs.add(k, fmt.Errorf("unknown url parameter '%s'", k))
 				} else if nested {
@@ -999,7 +999,7 @@ func (vo *ViewObject) Validate(json string, urlParams ...map[string]string) mo.R
 		if _, ok := urlPair[jsonKey]; ok {
 			errs.add(jsonKey, fmt.Errorf("duplicate parameter in url and json '%s'", jsonKey))
 		}
-		if !vo.allowUnknownFields {
+		if !s.allowUnknownFields {
 			if _, ok := voFields[jsonKey]; !ok {
 				errs.add(jsonKey, fmt.Errorf("unknown json field '%s'", jsonKey))
 			}
@@ -1011,7 +1011,7 @@ func (vo *ViewObject) Validate(json string, urlParams ...map[string]string) mo.R
 		return mo.Err[ValueObject](errs.err())
 	}
 
-	for _, field := range vo.fields {
+	for _, field := range s.fields {
 		var rs mo.Result[any]
 		node := gjson.Get(json, field.Name())
 		if !node.Exists() {
@@ -1045,7 +1045,7 @@ func (vo *ViewObject) Validate(json string, urlParams ...map[string]string) mo.R
 	}
 
 	// Add unknown URL parameters to the final object if allowed.
-	if vo.allowUnknownFields {
+	if s.allowUnknownFields {
 		for k, v := range urlPair {
 			if _, exists := object[k]; !exists {
 				object[k] = v

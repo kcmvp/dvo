@@ -209,7 +209,7 @@ func TestJSONField_validateRaw(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
 		name                string
-		field               ViewField
+		field               SchemaField
 		input               string
 		wantValue           any
 		wantErr             error
@@ -891,10 +891,10 @@ func TestValidationError_err(t *testing.T) {
 	}
 }
 
-func TestViewField_validate(t *testing.T) {
+func TestSchemaField_validate(t *testing.T) {
 	tests := []struct {
 		name      string
-		field     ViewField
+		field     SchemaField
 		json      string
 		wantValue any
 		wantErr   error
@@ -999,10 +999,10 @@ func TestWithFields(t *testing.T) {
 	}
 }
 
-func TestViewObject_AllowUnknownFields(t *testing.T) {
+func TestSchema_AllowUnknownFields(t *testing.T) {
 	tests := []struct {
 		name          string
-		vo            *ViewObject
+		vo            *Schema
 		json          string
 		allowUnknown  bool
 		expectErr     bool
@@ -1050,14 +1050,14 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 			errContains:  "name is required",
 		},
 		{
-			name:         "Corner case: empty ViewObject, should not error",
+			name:         "Corner case: empty Schema, should not error",
 			vo:           WithFields(),
 			json:         `{"name": "gopher"}`,
 			allowUnknown: true,
 			expectErr:    false,
 		},
 		{
-			name:         "Corner case: empty ViewObject, unknown fields disallowed, should error",
+			name:         "Corner case: empty Schema, unknown fields disallowed, should error",
 			vo:           WithFields(),
 			json:         `{"name": "gopher"}`,
 			allowUnknown: false,
@@ -1092,8 +1092,8 @@ func TestViewObject_AllowUnknownFields(t *testing.T) {
 }
 
 func TestEndToEnd(t *testing.T) {
-	// Define the ViewObject with various field types and constraints
-	userView := WithFields(
+	// Define the Schema with various field types and constraints
+	userSchema := WithFields(
 		Field[string]("name", constraint.MinLength(3)),
 		Field[int]("age", constraint.Between(18, 120)),
 		Field[string]("email", constraint.Email()).Optional(),
@@ -1330,7 +1330,7 @@ func TestEndToEnd(t *testing.T) {
 			require.NoError(t, err, "failed to read test data file")
 
 			// validate
-			res := userView.Validate(string(jsonData))
+			res := userSchema.Validate(string(jsonData))
 
 			if tc.isValid {
 				require.False(t, res.IsError(), "expected validation to succeed, but it failed with: %v", res.Error())
@@ -1660,9 +1660,9 @@ func TestNestedValidation(t *testing.T) {
 	}
 }
 
-func TestViewObject_Validate(t *testing.T) {
-	// Define a base ViewObject for testing various validation scenarios.
-	testVO := WithFields(
+func TestSchema_Validate(t *testing.T) {
+	// Define a base Schema for testing various validation scenarios.
+	testSchema := WithFields(
 		Field[string]("name"),
 		Field[int]("id"),
 		ObjectField("user", WithFields(Field[string]("email"))).Optional(),
@@ -1670,7 +1670,7 @@ func TestViewObject_Validate(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		vo          *ViewObject
+		vo          *Schema
 		json        string
 		urlParams   []map[string]string
 		wantErr     bool
@@ -1679,7 +1679,7 @@ func TestViewObject_Validate(t *testing.T) {
 	}{
 		{
 			name:        "invalid json",
-			vo:          testVO,
+			vo:          testSchema,
 			json:        `{"id": 123,}`,
 			urlParams:   nil,
 			wantErr:     true,
@@ -1687,7 +1687,7 @@ func TestViewObject_Validate(t *testing.T) {
 		},
 		{
 			name:        "duplicated url parameter across maps",
-			vo:          testVO,
+			vo:          testSchema,
 			json:        "",
 			urlParams:   []map[string]string{{"id": "1"}, {"id": "2"}},
 			wantErr:     true,
@@ -1695,7 +1695,7 @@ func TestViewObject_Validate(t *testing.T) {
 		},
 		{
 			name:        "unknown url parameter disallowed",
-			vo:          testVO,
+			vo:          testSchema,
 			json:        "",
 			urlParams:   []map[string]string{{"extra": "param"}},
 			wantErr:     true,
@@ -1722,7 +1722,7 @@ func TestViewObject_Validate(t *testing.T) {
 		},
 		{
 			name:        "url parameter mapped to embedded object",
-			vo:          testVO,
+			vo:          testSchema,
 			json:        "",
 			urlParams:   []map[string]string{{"user": "some-value"}},
 			wantErr:     true,
@@ -1730,7 +1730,7 @@ func TestViewObject_Validate(t *testing.T) {
 		},
 		{
 			name:        "conflict between json and url parameter",
-			vo:          testVO,
+			vo:          testSchema,
 			json:        `{"id": 123}`,
 			urlParams:   []map[string]string{{"id": "456"}},
 			wantErr:     true,
@@ -1738,7 +1738,7 @@ func TestViewObject_Validate(t *testing.T) {
 		},
 		{
 			name:      "valid with json and url params",
-			vo:        testVO,
+			vo:        testSchema,
 			json:      `{"name": "gopher"}`,
 			urlParams: []map[string]string{{"id": "123"}},
 			wantErr:   false,
@@ -1770,7 +1770,7 @@ func TestViewObject_Validate(t *testing.T) {
 	}
 }
 
-func TestViewObject_Extend(t *testing.T) {
+func TestSchema_Extend(t *testing.T) {
 	baseSchema := WithFields(
 		Field[string]("id"),
 		Field[time.Time]("createdAt"),
