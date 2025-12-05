@@ -39,13 +39,13 @@ This diagram illustrates how `dvo` sits at the core of your data flow, serving a
 stateDiagram-v2
     direction LR
 
-    state "External" as ext {
+    state "Http" as ext {
         direction TB
-        A: HTTP Request/Response
+        A: Request/Response
     }
 
-    state "DVO For Inbound" as dvo {
-        V: Schema / ValueObject
+    state "DVO Inbound" as dvo {
+        V: Schema/ValueObject
     }
 
     state "Application Layer" as app {
@@ -57,7 +57,7 @@ stateDiagram-v2
     }
     
     state "DVO Wrapper" as outbound {
-        W: ValueObject / Entity
+        W: ValueObject/Entity
     }
 
     A --> V : 1. Untrusted Input(json)
