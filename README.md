@@ -41,11 +41,11 @@ stateDiagram-v2
 
     state "Http" as ext {
         direction TB
-        A: Request/Response
+        A: Request\nResponse
     }
 
     state "DVO Inbound" as dvo {
-        V: Schema/ValueObject
+        V: Schema\nValueObject
     }
 
     state "Application Layer" as app {
@@ -57,7 +57,7 @@ stateDiagram-v2
     }
     
     state "DVO Wrapper" as outbound {
-        W: ValueObject/Entity
+        W: ValueObject\nEntity
     }
 
     A --> V : 1. Untrusted Input(json)
