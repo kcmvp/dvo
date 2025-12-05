@@ -20,26 +20,25 @@
 
 </p>
 
+**dvo** is a powerful, source-agnostic validation framework for Go that eliminates redundant and scattered validation logic.
+
+We've all felt the pain. For one endpoint, you're meticulously adding struct tags to a JSON request body. For another, you're writing a tangled web of `if/else` statements to validate URL query parameters. The logic for validating the same piece of data, like a user ID, ends up duplicated in multiple places. When a rule changes, you have to hunt down every instance, hoping you don't miss one. This is brittle, error-prone, and doesn't scale.
+
+**dvo** solves this by creating a single source of truth. It provides a fluent, declarative API to build reusable validation schemas (`ValueObject`) that are completely decoupled from the data's origin. You define the validation rules for a concept like 'username' or 'paging' once, and then apply that schema to request bodies, query parameters, or any other data source. This is the core principle of **dvo**: centralize your validation logic, simplify maintenance, and build dramatically more robust and reliable APIs.
+
 ## Goal
 
-The goal of `dvo` is to address fundamental challenges in application data handling by adhering to a few core principles:
+The primary challenge in modern application development is not just handling data, but managing the explosion of data structures. For each business scenario, we often create a new, slightly different struct, leading to an unmanageable number of similar-yet-distinct types.
 
-1.  **Centralize Validation as a Single Source of Truth**
-    Instead of scattering validation rules across struct tags and conditional logic, `dvo` centralizes them into reusable, composable schemas. This eliminates duplication and makes maintenance dramatically simpler.
+**dvo** solves this by establishing a clear boundary and a single source of truth for your data contracts. It acts as a gatekeeper for both incoming and outgoing data, ensuring its integrity and structure.
 
-2.  **Decouple Validation from Data Source**
-    A `dvo` schema is source-agnostic. The same schema can be used to validate data from an HTTP request, a database record, or a message queue, ensuring consistent rules are applied across your entire application.
-
-3.  **Guarantee Data Contracts for Both Inbound and Outbound Flows**
-    `dvo` acts as a gatekeeper at your application's boundaries. It not only validates untrusted incoming data but can also be used to guarantee that outgoing data (e.g., API responses) strictly adheres to a predefined contract, preventing data leakage and ensuring consistency.
-
-This diagram illustrates how `dvo` sits at the core of your data flow, serving as the single source of truth for your data contracts:
+This diagram illustrates the two primary data flows where `dvo` provides significant value:
 
 ```mermaid
 stateDiagram-v2
     direction LR
 
-    state "Http" as ext {
+    state "HTTP" as ext {
         direction TB
         A: Request<br>Response
     }
@@ -60,7 +59,7 @@ stateDiagram-v2
         W: ValueObject<br>Entity
     }
 
-    A --> V : 1. Untrusted(json)
+    A --> V : 1. Untrusted Input(json)
     V --> S : 2. Trusted Data
     S --> W : 3. Business Logic
     W --> DB : 4. Wrap
@@ -68,7 +67,7 @@ stateDiagram-v2
     W --> S : 6. Business Logic
     S --> A : 7. Response(json)
 
-    classDef dvoStyle stroke:#82B366,stroke-width:2px
+    classDef dvoStyle stroke:light-yellow,stroke-width:4px
     class dvo dvoStyle
     class outbound dvoStyle
 ```
