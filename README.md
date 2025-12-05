@@ -41,7 +41,7 @@ stateDiagram-v2
 
     state "Http" as ext {
         direction TB
-        A: Request\nResponse
+        A: "Request\nResponse"
     }
 
     state "DVO Inbound" as dvo {
