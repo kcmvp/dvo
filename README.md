@@ -60,7 +60,7 @@ stateDiagram-v2
         W: ValueObject\nEntity
     }
 
-    A --> V : 1. Untrusted Input(json)
+    A --> V : 1. Untrusted(json)
     V --> S : 2. Trusted Data
     S --> W : 3. Business Logic
     W --> DB : 4. Wrap
