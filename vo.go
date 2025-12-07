@@ -83,9 +83,12 @@ type JSONField[T constraint.FieldType] struct {
 	validators []constraint.Validator[T]
 }
 
-func (f *JSONField[T]) toViewField() SchemaField {
+func (f *JSONField[T]) AsSchemaField() SchemaField {
 	return f
 }
+
+// seal makes the FieldProvider interface non-implementable by external packages.
+func (f *JSONField[T]) seal() {}
 
 func (f *JSONField[T]) Required() bool {
 	return f.required
@@ -397,8 +400,10 @@ func typedString[T constraint.FieldType](s string) mo.Result[T] {
 
 // FieldProvider is an interface for any type that can provide a SchemaField.
 // It's used to create a type-safe and unified API for WithFields.
+// The unexported seal() method makes this interface non-implementable by external packages.
 type FieldProvider interface {
-	toViewField() SchemaField
+	AsSchemaField() SchemaField
+	seal()
 }
 
 // ObjectField creates a slice of SchemaField for a embeddedObject object.
@@ -469,7 +474,7 @@ type Schema struct {
 func WithFields(providers ...FieldProvider) *Schema {
 	fields := make([]SchemaField, len(providers))
 	for i, p := range providers {
-		fields[i] = p.toViewField()
+		fields[i] = p.AsSchemaField()
 	}
 	names := make(map[string]struct{})
 	for _, f := range fields {
@@ -532,7 +537,7 @@ func (s *Schema) Extend(another *Schema) *Schema {
 //	itemID := vo.MstInt("items.0.id")   // 101
 //
 // If a path is invalid (e.g., key not found), the `Option`
-// based getters (like `String`) will return `mo.None`, while the `Mst` prefixed
+// based getters (like `Clause`) will return `mo.None`, while the `Mst` prefixed
 // getters (like `MstString`) will panic.
 //
 // If a path is malformed (e.g., non-integer index for an array, out-of-bounds index)

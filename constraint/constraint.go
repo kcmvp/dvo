@@ -85,7 +85,7 @@ func (set charSet) value() (chars string, name string) {
 	}
 }
 
-// --- String Validators ---
+// --- Clause Validators ---
 
 // MinLength validates that a string's length is at least the specified minimum.
 func MinLength(min int) ValidateFunc[string] {

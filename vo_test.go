@@ -26,7 +26,7 @@ func TestTypedString(t *testing.T) {
 		expectedErr         error
 		expectedErrContains string
 	}{
-		// String cases
+		// Clause cases
 		{
 			name:       "string_ok",
 			input:      "hello world",
@@ -1131,7 +1131,7 @@ func TestEndToEnd(t *testing.T) {
 			name:    "valid user",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
-				// String
+				// Clause
 				name, ok := vo.String("name").Get()
 				require.True(t, ok)
 				require.Equal(t, "John Doe", name)
@@ -1154,7 +1154,7 @@ func TestEndToEnd(t *testing.T) {
 				require.True(t, ok)
 				require.Equal(t, "active", status)
 
-				// Optional String not present
+				// Optional Clause not present
 				_, ok = vo.String("department").Get()
 				require.False(t, ok)
 
@@ -1552,13 +1552,13 @@ func TestNestedValidation(t *testing.T) {
 			name:        "invalid array type",
 			jsonFile:    "nested_invalid_array_type.json",
 			isValid:     false,
-			errContains: "field 'tags' expected a JSON array but got String",
+			errContains: "field 'tags' expected a JSON array but got Clause",
 		},
 		{
 			name:        "invalid item type in array of objects",
 			jsonFile:    "nested_invalid_item_type.json",
 			isValid:     false,
-			errContains: "items[1]: expected a JSON object but got String",
+			errContains: "items[1]: expected a JSON object but got Clause",
 		},
 		{
 			name:        "invalid tag validator",
