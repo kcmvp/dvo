@@ -2,9 +2,10 @@ package entity
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/xql"
-	"testing"
 )
 
 // --- Base Entity Definitions ---
@@ -34,11 +35,11 @@ func (u User) Table() string {
 var _ Entity = User{}
 
 // --- Generated Field Definitions (simulated 'dog' output) ---
-// The generated code would now call the top-level POField factory function.
+// The generated code would now call the top-level Field factory function.
 var (
-	ProductName  = POField[Product, string]("Name")
-	ProductPrice = POField[Product, float64]("Price")
-	UserName     = POField[User, string]("Name")
+	ProductName  = Field[Product, string]("Name")
+	ProductPrice = Field[Product, float64]("Price")
+	UserName     = Field[User, string]("Name")
 )
 
 func TestSchemaComposition(t *testing.T) {

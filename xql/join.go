@@ -2,81 +2,70 @@ package xql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strings"
 
-	"github.comcom/kcmvp/dvo"
+	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/entity"
 )
 
-// JointPO is a type-safe, generic wrapper for a joined persistent object result.
-// T is expected to be a struct that holds the combined fields from a JOIN query.
-type JointPO[T any] struct {
-	dvo.ValueObject
-	_ [0]T
+// Joint represents a single SQL join clause.
+type Joint interface {
+	// Clause returns the SQL string for the join.
+	Clause() string
 }
 
-// NewJointSchema creates a new schema for a JOIN query.
-// It is a generic function that accepts a struct type `T` which will hold the query result.
-// Crucially, it accepts FieldProviders from ANY entity, providing the flexibility needed for JOINs.
-// The responsibility of providing the correct fields from the joined tables lies with the developer.
-func NewJointSchema[T any](providers ...dvo.FieldProvider) *Schema[T] {
-	// This function is very similar to NewSchema, but the generic constraint is `any`,
-	// allowing it to be used for arbitrary result structs.
-	universalSchema := dvo.WithFields(providers...)
-	return &Schema[T]{
+// join is a private implementation of the Joint interface.
+type join struct {
+	clause string
+}
+
+func (j *join) Clause() string {
+	return j.clause
+}
+
+// getTableFromField extracts the table name from a field's qualified name.
+func getTableFromField(f entity.ViewFieldProvider) string {
+	return strings.Split(f.QualifiedName(), ".")[0]
+}
+
+// Join creates an INNER JOIN clause between two fields.
+// It assumes the second field's table is the one being joined.
+func Join(f1, f2 entity.ViewFieldProvider) Joint {
+	table2 := getTableFromField(f2)
+	clause := fmt.Sprintf("INNER JOIN %s ON %s = %s", table2, f1.QualifiedName(), f2.QualifiedName())
+	return &join{clause: clause}
+}
+
+// LeftJoin creates a LEFT JOIN clause between two fields.
+// The order is significant: FROM f1's table LEFT JOIN f2's table.
+func LeftJoin(f1, f2 entity.ViewFieldProvider) Joint {
+	table2 := getTableFromField(f2)
+	clause := fmt.Sprintf("LEFT JOIN %s ON %s = %s", table2, f1.QualifiedName(), f2.QualifiedName())
+	return &join{clause: clause}
+}
+
+func View(providers ...entity.ViewFieldProvider) *Schema[entity.Entity] {
+	dvoProviders := make([]dvo.FieldProvider, len(providers))
+	for i, p := range providers {
+		dvoProviders[i] = p
+	}
+	universalSchema := dvo.WithFields(dvoProviders...)
+	return &Schema[entity.Entity]{
 		Schema: universalSchema,
 	}
 }
 
-// XJoin represents a single JOIN clause in a multi-table query.
-type XJoin interface {
-	Clause() string
-}
-
-// Joint represents an INNER JOIN operation.
-// It holds the left and right fields of the ON clause.
-type Joint[E1 entity.Entity, E2 entity.Entity] struct {
-	Left  entity.FieldProvider[E1]
-	Right entity.FieldProvider[E2]
-}
-
-func (j Joint[E1, E2]) Clause() string {
-	var leftEntity E1
-	var rightEntity E2
-	return fmt.Sprintf("INNER JOIN %s ON %s = %s",
-		rightEntity.Table(),
-		j.Left.QualifiedName(),
-		j.Right.QualifiedName(),
-	)
-}
-
-// LeftJoint represents a LEFT JOIN operation.
-type LeftJoint[E1 entity.Entity, E2 entity.Entity] struct {
-	Left  entity.FieldProvider[E1]
-	Right entity.FieldProvider[E2]
-}
-
-func (j LeftJoint[E1, E2]) Clause() string {
-	var leftEntity E1
-	var rightEntity E2
-	return fmt.Sprintf("LEFT JOIN %s ON %s = %s",
-		rightEntity.Table(),
-		j.Left.QualifiedName(),
-		j.Right.QualifiedName(),
-	)
-}
-
 // JoinQuery executes a multi-table JOIN query.
-// The function itself is not generic over the result type `T` in its signature,
-// but it achieves type safety through the generic `schema` parameter.
-func JoinQuery(ctx context.Context, schema *Schema[any], where Where[any], joints ...XJoin) ([]JointPO[any], error) {
-	panic("designing")
+func JoinQuery(ctx context.Context, schema *Schema[entity.Entity], where Where[entity.Entity], joints ...Joint) ([]ValueObject[entity.Entity], error) {
+	panic("use joints to generate all kinds of join between entities")
 }
 
-func JoinDelete() {
-	panic("designing")
+func JoinDelete(ctx context.Context, where Where[entity.Entity], joints ...Joint) (sql.Result, error) {
+	panic("use joints to generate all kinds of join between entities")
 }
 
-func JoinUpdate() {
-	panic("designing")
+func JoinUpdate(ctx context.Context, set ValueObject[entity.Entity], where Where[entity.Entity], joints ...Joint) (sql.Result, error) {
+	panic("use joints to generate all kinds of join between entities")
 }

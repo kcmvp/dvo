@@ -21,10 +21,10 @@ type Schema[T entity.Entity] struct {
 	_ [0]T
 }
 
-// PO (Persistent Object) is a type-safe, generic wrapper around a universal dvo.ValueObject.
+// ValueObject (Persistent Object) is a type-safe, generic wrapper around a universal dvo.ValueObject.
 // It uses the zero-length array idiom to associate the entity type T at compile time
 // without any memory cost, making it a lightweight, type-safe handle.
-type PO[T entity.Entity] struct {
+type ValueObject[T entity.Entity] struct {
 	dvo.ValueObject
 	_ [0]T
 }
@@ -51,7 +51,7 @@ func NewSchema[T entity.Entity](providers ...entity.FieldProvider[T]) *Schema[T]
 
 // Query is a generic function that queries the database and returns a slice of T.
 // It uses the provided schema to build the SELECT clause and the Where interface to build the WHERE clause.
-func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[T]) ([]PO[T], error) {
+func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[T]) ([]ValueObject[T], error) {
 	panic("implement me")
 }
 
@@ -59,11 +59,11 @@ func Delete[T entity.Entity](ctx context.Context, where Where[T]) (sql.Result, e
 	panic("implement me")
 }
 
-func Insert[T entity.Entity](ctx context.Context, po PO[T]) (sql.Result, error) {
+func Insert[T entity.Entity](ctx context.Context, po ValueObject[T]) (sql.Result, error) {
 	panic("implement me")
 }
 
-func Update[T entity.Entity](ctx context.Context, po PO[T], where Where[T]) (sql.Result, error) {
+func Update[T entity.Entity](ctx context.Context, set ValueObject[T], where Where[T]) (sql.Result, error) {
 	panic("implement me")
 }
 
