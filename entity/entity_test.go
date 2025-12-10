@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/xql"
+	"github.com/kcmvp/dvo/sqlx"
 )
 
 // --- Base Entity Definitions ---
@@ -55,7 +55,7 @@ func TestSchemaComposition(t *testing.T) {
 
 	// This demonstrates creating a type-safe, persistence-aware schema.
 	// It uses the NewSchema factory, which returns a provider strictly typed to the entity.
-	po := xql.NewSchema[Product](
+	po := sqlx.NewSchema[Product](
 		ProductName,
 		ProductPrice,
 	)

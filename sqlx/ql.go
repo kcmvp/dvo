@@ -1,4 +1,4 @@
-package xql
+package sqlx
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func Insert[T entity.Entity](ctx context.Context, po ValueObject[T]) (sql.Result
 	panic("implement me")
 }
 
-func Update[T entity.Entity](ctx context.Context, set ValueObject[T], where Where[T]) (sql.Result, error) {
+func Update[T entity.Entity](ctx context.Context, setter ValueObject[T], where Where[T]) (sql.Result, error) {
 	panic("implement me")
 }
 

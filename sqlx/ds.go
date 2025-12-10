@@ -1,4 +1,4 @@
-package xql
+package sqlx
 
 import (
 	"database/sql"
