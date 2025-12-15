@@ -158,7 +158,7 @@ func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 	// Case: Array
 	if f.IsArray() {
 		if !node.IsArray() {
-			return mo.Err[any](fmt.Errorf("dvo: field '%s' expected a JSON array but got %s", f.Name(), node.Type))
+			return mo.Err[any](fmt.Errorf("dvo: field '%s' expected a JSON array but got Clause", f.Name()))
 		}
 		errs := &validationError{}
 		// Subcase: Array of Objects
@@ -166,7 +166,7 @@ func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 			var values []ValueObject
 			node.ForEach(func(index, element gjson.Result) bool {
 				if !element.IsObject() {
-					errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), fmt.Errorf("expected a JSON object but got %s", element.Type))
+					errs.add(fmt.Sprintf("%s[%d]", f.Name(), index.Int()), fmt.Errorf("expected a JSON object but got Clause"))
 					return true // continue
 				}
 				result := f.embedded.Validate(element.Raw)

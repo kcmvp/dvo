@@ -133,7 +133,7 @@ func Or[T entity.Entity](wheres ...Where[T]) Where[T] {
 // op is a helper function to create a simple binary operator condition.
 func op[E entity.Entity](field entity.FieldProvider[E], operator string, value any) Where[E] {
 	f := func() (string, []any) {
-		clause := fmt.Sprintf("%s %s ?", field.QualifiedName())
+		clause := fmt.Sprintf("%s %s ?", field.QualifiedName(), operator)
 		args := []any{value}
 		return clause, args
 	}
@@ -142,40 +142,40 @@ func op[E entity.Entity](field entity.FieldProvider[E], operator string, value a
 
 // Eq creates an "equal to" condition (e.g., "name = ?").
 func Eq[E entity.Entity](field entity.FieldProvider[E], value any) Where[E] {
-	return op(field, "=", value)
+	return op[E](field, "=", value)
 }
 
 // Ne creates a "not equal to" condition (e.g., "status != ?").
 func Ne[E entity.Entity](field entity.FieldProvider[E], value any) Where[E] {
-	return op(field, "!=", value)
+	return op[E](field, "!=", value)
 }
 
 // Gt creates a "greater than" condition (e.g., "price > ?").
 func Gt[E entity.Entity](field entity.FieldProvider[E], value any) Where[E] {
-	return op(field, ">", value)
+	return op[E](field, ">", value)
 }
 
 // Gte creates a "greater than or equal to" condition (e.g., "stock >= ?").
 func Gte[E entity.Entity](field entity.FieldProvider[E], value any) Where[E] {
-	return op(field, ">=", value)
+	return op[E](field, ">=", value)
 }
 
 // Lt creates a "less than" condition (e.g., "age < ?").
 func Lt[E entity.Entity](field entity.FieldProvider[E], value any) Where[E] {
-	return op(field, "<", value)
+	return op[E](field, "<", value)
 }
 
 // Lte creates a "less than or equal to" condition (e.g., "discount <= ?").
 func Lte[E entity.Entity](field entity.FieldProvider[E], value any) Where[E] {
-	return op(field, "<=", value)
+	return op[E](field, "<=", value)
 }
 
 // Like creates a "LIKE" condition (e.g., "email LIKE ?").
 func Like[E entity.Entity](field entity.FieldProvider[E], value string) Where[E] {
-	return op(field, "LIKE", value)
+	return op[E](field, "LIKE", value)
 }
 
-// In creates an "IN (...)" condition.
+// In creates an "IN (... )" condition.
 // It handles empty value slices gracefully by returning an always-false condition
 // to prevent SQL syntax errors, which is safer than returning an empty string.
 func In[E entity.Entity](field entity.FieldProvider[E], values ...any) Where[E] {

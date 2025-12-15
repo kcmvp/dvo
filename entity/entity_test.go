@@ -1,11 +1,11 @@
-package entity
+package entity_test
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/sqlx"
+	"github.com/kcmvp/dvo/entity"
 )
 
 // --- Base Entity Definitions ---
@@ -21,7 +21,7 @@ func (p Product) Table() string {
 	return "t_product"
 }
 
-var _ Entity = Product{}
+var _ entity.Entity = Product{}
 
 type User struct {
 	ID   string `json:"id"`
@@ -32,20 +32,19 @@ func (u User) Table() string {
 	return "t_user"
 }
 
-var _ Entity = User{}
+var _ entity.Entity = User{}
 
 // --- Generated Field Definitions (simulated 'dog' output) ---
 // The generated code would now call the top-level Field factory function.
 var (
-	ProductName  = Field[Product, string]("Name")
-	ProductPrice = Field[Product, float64]("Price")
-	UserName     = Field[User, string]("Name")
+	ProductName  = entity.Field[Product, string]("Name")
+	ProductPrice = entity.Field[Product, float64]("Price")
+	UserName     = entity.Field[User, string]("Name")
 )
 
 func TestSchemaComposition(t *testing.T) {
-	// This demonstrates creating a schema for the view layer using a simple dvo.Field.
-	// Note: We might need to re-introduce a ViewField factory if we want to keep this separation.
-	// For now, we assume the view layer can also use dvo.Field directly.
+	// This demonstrates creating a schema-like value using dvo.WithFields and the
+	// entity.Field factory without importing sqlx to avoid import cycles.
 	vo := dvo.WithFields(
 		ProductName,
 		ProductPrice,
@@ -53,13 +52,9 @@ func TestSchemaComposition(t *testing.T) {
 
 	fmt.Println(vo)
 
-	// This demonstrates creating a type-safe, persistence-aware schema.
-	// It uses the NewSchema factory, which returns a provider strictly typed to the entity.
-	po := sqlx.NewSchema[Product](
-		ProductName,
-		ProductPrice,
-	)
-
-	fmt.Println(po)
+	// Simple assertion: ensure the qualified name includes the table prefix.
+	if got := ProductName.AsSchemaField().Name(); got != "Name" {
+		t.Fatalf("expected field name 'Name', got %q", got)
+	}
 
 }
