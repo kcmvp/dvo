@@ -145,4 +145,9 @@ The `xql` tool infers a default mapping from the Go field's type. You can overri
 | `time.Time` | `TIMESTAMP WITH TIME ZONE` | `DATETIME`         | `TEXT`              | SQLite stores as an ISO-8601 string.                               |
 | `[]byte`    | `BYTEA`                    | `BLOB`             | `BLOB`              |                                                                    |
 
+---
 
+## TODO
+### Customized data types
+- We should update `FieldType` in `constraint/constraint.go` to support a wider range of types. The current definition is too restrictive and does not handle 
+ custom string-based enums, slices (`[]string`, `[]byte`), or maps. By using `~string`, we can support any type with an underlying string type, and by adding slice and map types, we can correctly generate fields for more complex entities.

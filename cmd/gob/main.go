@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kcmvp/dvo/cmd/gob/dev"
 	"github.com/kcmvp/dvo/cmd/gob/sca"
@@ -18,10 +19,20 @@ var rootCmd = &cobra.Command{
 	Long: `gob (Go Booter) is a command-line tool that provides code generation,
 project scaffolding, and development utilities to accelerate Go development.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if internal.Project != nil {
-			fmt.Printf("Project root is %s", internal.Project.Root)
+		if internal.Current != nil {
+			fmt.Printf("Project root is %s\n", internal.Current.Root)
+			// Safety check: user's project must not import this tool's cmd packages
+			blockPrefix := fmt.Sprintf("%s/cmd", internal.ToolModulePath())
+
+			for _, pkg := range internal.Current.Pkgs {
+				for impPath := range pkg.Imports {
+					if strings.HasPrefix(impPath, blockPrefix) {
+						return fmt.Errorf("invalid import '%s' in package %s; user projects must not import '%s'", impPath, pkg.PkgPath, blockPrefix)
+					}
+				}
+			}
 		} else {
-			fmt.Printf("Project is not initialized")
+			fmt.Printf("Project is not initialized\n")
 		}
 		return nil
 	},

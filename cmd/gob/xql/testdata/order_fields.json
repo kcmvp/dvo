@@ -1,0 +1,7 @@
+{
+  "ID": "entity.Field[Order, int64](\"ID\")",
+  "AccountID": "entity.Field[Order, int64](\"AccountID\")",
+  "Amount": "entity.Field[Order, float64](\"Amount\")",
+  "CreatedAt": "entity.Field[Order, time.Time](\"CreatedAt\")"
+}
+
