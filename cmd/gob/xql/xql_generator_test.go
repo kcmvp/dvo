@@ -63,6 +63,9 @@ func compareFiles(t *testing.T, generatedFilePath, testDataFilePath string) {
 	testDataContent, err := os.ReadFile(testDataFilePath)
 	require.NoError(t, err)
 
+	if cleanSQL(string(testDataContent)) != cleanSQL(string(generatedContent)) {
+		t.Log("Generated file content:\n", string(generatedContent))
+	}
 	require.Equal(t, cleanSQL(string(testDataContent)), cleanSQL(string(generatedContent)))
 }
 
@@ -82,37 +85,35 @@ func TestGeneration(t *testing.T) {
 	// Ensure the project is initialized
 	require.NotNil(t, internal.Current, "internal.Current should be initialized")
 
-	// Clean up generated files before running the test
-	os.RemoveAll(internal.Current.GenPath())
-
 	// Create a context with database adapters
-	ctx := context.WithValue(context.Background(), XqlDBAdapterKey, []string{"sqlite", "postgres", "mysql"})
+	ctx := context.WithValue(context.Background(), dbaAdapterKey, []string{"sqlite", "postgres", "mysql"})
 
 	// Run the generator
-	err := generate(ctx)
+	err := Generate(ctx)
 	require.NoError(t, err)
+	testDataDir := filepath.Join(internal.Current.Root, "testdata")
 
 	// Verify the output for Account fields
 	compareGoFileWithJSON(t,
 		filepath.Join(internal.Current.GenPath(), "field", "account", "account.go"),
-		filepath.Join("testdata", "account_fields.json"),
+		filepath.Join(testDataDir, "account_fields.json"),
 	)
 
 	// Verify the output for Order fields
 	compareGoFileWithJSON(t,
 		filepath.Join(internal.Current.GenPath(), "field", "order", "order.go"),
-		filepath.Join("testdata", "order_fields.json"),
+		filepath.Join(testDataDir, "order_fields.json"),
 	)
 
 	// Verify the output for schemas
 	for _, db := range []string{"sqlite", "postgres", "mysql"} {
 		compareFiles(t,
 			filepath.Join(internal.Current.GenPath(), "schemas", db, "account_schema.sql"),
-			filepath.Join("testdata", "account_"+db+"_schema.sql"),
+			filepath.Join(testDataDir, db, "account_schema.sql"),
 		)
 		compareFiles(t,
 			filepath.Join(internal.Current.GenPath(), "schemas", db, "order_schema.sql"),
-			filepath.Join("testdata", "order_"+db+"_schema.sql"),
+			filepath.Join(testDataDir, db, "order_schema.sql"),
 		)
 	}
 }

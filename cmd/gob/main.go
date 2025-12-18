@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
+	"slices"
 
 	"github.com/kcmvp/dvo/cmd/gob/dev"
 	"github.com/kcmvp/dvo/cmd/gob/sca"
@@ -21,13 +21,15 @@ project scaffolding, and development utilities to accelerate Go development.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if internal.Current != nil {
 			fmt.Printf("Project root is %s\n", internal.Current.Root)
-			// Safety check: user's project must not import this tool's cmd packages
-			blockPrefix := fmt.Sprintf("%s/cmd", internal.ToolModulePath())
+			blockPrefixes := []string{
+				fmt.Sprintf("%s/cmd", internal.ToolModulePath()),
+				fmt.Sprintf("%s/sample", internal.ToolModulePath()),
+			}
 
 			for _, pkg := range internal.Current.Pkgs {
 				for impPath := range pkg.Imports {
-					if strings.HasPrefix(impPath, blockPrefix) {
-						return fmt.Errorf("invalid import '%s' in package %s; user projects must not import '%s'", impPath, pkg.PkgPath, blockPrefix)
+					if slices.Contains(blockPrefixes, impPath) {
+						return fmt.Errorf("invalid import '%s' in package %s; user projects must not import '%v'", impPath, pkg.PkgPath, blockPrefixes)
 					}
 				}
 			}

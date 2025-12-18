@@ -48,22 +48,23 @@ type TemplateData struct {
 
 // Field represents a single column in a database table, derived from a Go struct field.
 type Field struct {
-	Name      string // The database column name (e.g., "creation_time").
-	GoName    string // The original Go field name (e.g., "CreatedAt").
-	GoType    string // The Go type of the field (e.g., "time.Time").
-	DBType    string // The specific SQL type for the column (e.g., "TIMESTAMP WITH TIME ZONE").
-	IsPK      bool   // True if this field is the primary key.
-	IsNotNull bool   // True if the column has a NOT NULL constraint.
-	IsUnique  bool   // True if the column has a UNIQUE constraint.
-	IsIndexed bool   // True if an index should be created on this column.
-	Default   string // The default value for the column, as a string.
-	FKTable   string // The table referenced by a foreign key.
-	FKColumn  string // The column referenced by a foreign key.
-	Warning   string // A warning message associated with this field, e.g., for discouraged PK types.
+	Name       string // The database column name (e.g., "creation_time").
+	GoName     string // The original Go field name (e.g., "CreatedAt").
+	GoType     string // The Go type of the field (e.g., "time.Time").
+	DBType     string // The specific SQL type for the column (e.g., "TIMESTAMP WITH TIME ZONE").
+	IsPK       bool   // True if this field is the primary key.
+	IsNotNull  bool   // True if the column has a NOT NULL constraint.
+	IsUnique   bool   // True if the column has a UNIQUE constraint.
+	IsIndexed  bool   // True if an index should be created on this column.
+	Default    string // The default value for the column, as a string.
+	FKTable    string // The table referenced by a foreign key.
+	FKColumn   string // The column referenced by a foreign key.
+	Warning    string // A warning message associated with this field, e.g., for discouraged PK types.
+	IsEmbedded bool
 }
 
 // generate orchestrates field and schema generation.
-func generate(ctx context.Context) error {
+func Generate(ctx context.Context) error {
 	if generateFields() == nil {
 		return generateSchema(ctx)
 	}
@@ -154,7 +155,7 @@ func generateSchema(ctx context.Context) error {
 		return fmt.Errorf("project context not initialized")
 	}
 
-	adapters, ok := ctx.Value(XqlDBAdapterKey).([]string)
+	adapters, ok := ctx.Value(dbaAdapterKey).([]string)
 	if !ok || len(adapters) == 0 {
 		return fmt.Errorf("no database adapters are configured or detected")
 	}
@@ -182,6 +183,23 @@ func generateSchema(ctx context.Context) error {
 			if len(fields) == 0 {
 				continue
 			}
+
+			// Reorder fields: PK first, then host fields, then embedded fields.
+			var pkField []Field
+			var hostFields []Field
+			var embeddedFields []Field
+
+			for _, f := range fields {
+				if f.IsPK {
+					pkField = append(pkField, f)
+				} else if f.IsEmbedded {
+					embeddedFields = append(embeddedFields, f)
+				} else {
+					hostFields = append(hostFields, f)
+				}
+			}
+			fields = append(pkField, hostFields...)
+			fields = append(fields, embeddedFields...)
 
 			tableName := lo.SnakeCase(structName)
 			// A simplified way to get the table name from the Table() method.
@@ -254,8 +272,29 @@ func parseFields(spec *ast.TypeSpec, adapter string) []Field {
 
 	var fields []Field
 	for _, field := range structType.Fields.List {
-		if len(field.Names) == 0 || !field.Names[0].IsExported() {
-			continue // Skip fields without names (e.g., embedded structs) or private fields
+		if len(field.Names) == 0 { // Embedded struct
+			var ident *ast.Ident
+			switch t := field.Type.(type) {
+			case *ast.Ident:
+				ident = t
+			case *ast.SelectorExpr:
+				ident = t.Sel
+			}
+
+			if ident != nil && ident.Obj != nil && ident.Obj.Kind == ast.Typ {
+				if embeddedSpec, ok := ident.Obj.Decl.(*ast.TypeSpec); ok {
+					embeddedFields := parseFields(embeddedSpec, adapter)
+					for i := range embeddedFields {
+						embeddedFields[i].IsEmbedded = true
+					}
+					fields = append(fields, embeddedFields...)
+				}
+			}
+			continue
+		}
+
+		if !field.Names[0].IsExported() {
+			continue // Skip private fields
 		}
 
 		xqlTag := ""

@@ -14,7 +14,7 @@ func TestXqlCmd_EmbedDrivers(t *testing.T) {
 	err := XqlCmd.PersistentPreRunE(XqlCmd, []string{})
 	require.NoError(t, err)
 
-	v := XqlCmd.Context().Value(XqlDBAdapterKey)
+	v := XqlCmd.Context().Value(dbaAdapterKey)
 	require.NotNil(t, v, "expected drivers value in command context")
 
 	drivers, ok := v.([]string)

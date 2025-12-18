@@ -14,9 +14,9 @@ import (
 
 // Context keys and other shared constants used across the tools.
 const (
-	// XqlDBAdapterKey is the context key used to store the detected DB adapter
+	// dbaAdapterKey is the context key used to store the detected DB adapter
 	// for xql subcommands.
-	XqlDBAdapterKey = "xql.dbAdapter"
+	dbaAdapterKey = "xql.dbAdapter"
 )
 
 //go:embed resources/drivers.json
@@ -62,7 +62,7 @@ var XqlCmd = &cobra.Command{
 		if parent == nil {
 			parent = context.Background()
 		}
-		ctx := context.WithValue(parent, XqlDBAdapterKey, registered)
+		ctx := context.WithValue(parent, dbaAdapterKey, registered)
 		cmd.SetContext(ctx)
 		return nil
 	},
@@ -72,7 +72,7 @@ var schemaCmd = &cobra.Command{
 	Use:   "schema",
 	Short: "Generate schemas for all entities.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return generate(cmd.Context())
+		return Generate(cmd.Context())
 	},
 }
 

@@ -215,10 +215,10 @@ func (p *Project) StructsImplementEntity() []EntityInfo {
 
 // GenPath returns the root path for generated files. It returns
 // `{project_root}/gen` by default. When running in a test, it returns
-// `{project_root}/cmd/gob/gen` to avoid polluting the project root.
+// `{project_root}/sample/gen` to ensure generated code is available for reference.
 func (p *Project) GenPath() string {
 	if flag.Lookup("test.v") != nil {
-		return filepath.Join(p.Root, "cmd/gob/gen")
+		return filepath.Join(p.Root, "sample", "gen")
 	}
 	return filepath.Join(p.Root, "gen")
 }
