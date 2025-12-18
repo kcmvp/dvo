@@ -3,6 +3,7 @@ package xql
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -20,6 +21,7 @@ import (
 	"github.com/kcmvp/dvo/cmd/internal"
 	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
+	"golang.org/x/tools/go/packages"
 )
 
 //go:embed resources/fields.tmpl
@@ -63,24 +65,228 @@ type Field struct {
 	IsEmbedded bool
 }
 
-// generate orchestrates field and schema generation.
-func Generate(ctx context.Context) error {
-	if generateFields() == nil {
-		return generateSchema(ctx)
+// isSupportedType checks if a field type is valid.
+func isSupportedType(typ types.Type) bool {
+	// Check for named types like time.Time
+	if named, ok := typ.(*types.Named); ok {
+		if named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == "time" && named.Obj().Name() == "Time" {
+			return true
+		}
 	}
-	return nil
+
+	// Check for basic types
+	basic, ok := typ.Underlying().(*types.Basic)
+	if !ok {
+		return false
+	}
+
+	// Explicit kind set instead of a switch to avoid IDE warnings about missing iota cases.
+	allowed := map[types.BasicKind]struct{}{
+		types.Bool:    {},
+		types.Int:     {},
+		types.Int8:    {},
+		types.Int16:   {},
+		types.Int32:   {},
+		types.Int64:   {},
+		types.Uint:    {},
+		types.Uint8:   {},
+		types.Uint16:  {},
+		types.Uint32:  {},
+		types.Uint64:  {},
+		types.Float32: {},
+		types.Float64: {},
+		types.String:  {},
+	}
+	_, ok = allowed[basic.Kind()]
+	return ok
 }
 
-// generateFields generates the entity field helpers.
-func generateFields() error {
+// applyOrderPolicy reorders a slice of fields based on the defined ordering policy:
+// 1. Primary key fields
+// 2. Host struct fields
+// 3. Embedded struct fields
+func applyOrderPolicy(fields []Field) []Field {
+	var pkFields []Field
+	var hostFields []Field
+	var embeddedFields []Field
+
+	for _, f := range fields {
+		if f.IsPK {
+			pkFields = append(pkFields, f)
+		} else if f.IsEmbedded {
+			embeddedFields = append(embeddedFields, f)
+		} else {
+			hostFields = append(hostFields, f)
+		}
+	}
+
+	return append(append(pkFields, hostFields...), embeddedFields...)
+}
+
+// EntityMeta holds all the derived metadata needed to generate both field helpers
+// and database schemas for one entity.
+//
+// Fields are ordered using applyOrderPolicy.
+type EntityMeta struct {
+	StructName string
+	PkgPath    string
+	Pkg        *packages.Package
+	TypeSpec   *ast.TypeSpec
+	TableName  string
+	Fields     []Field // adapter-agnostic field info (no DBType)
+}
+
+// generate is the single entrypoint for this package's generation workflow.
+// It builds entity metadata once, then generates both field helpers and schemas.
+func generate(ctx context.Context) error {
+	meta, err := generateMeta(ctx)
+	if err != nil {
+		return err
+	}
+	if err := generateFieldsFromMeta(meta); err != nil {
+		return err
+	}
+	return generateSchemaFromMeta(ctx, meta)
+}
+
+// generateMeta builds a consistent metadata model from source code exactly once.
+// Both field helpers and schema generation should consume this output to avoid
+// drift and duplicated parsing logic.
+func generateMeta(ctx context.Context) ([]EntityMeta, error) {
 	project := internal.Current
 	if project == nil {
-		return fmt.Errorf("project context not initialized")
+		return nil, fmt.Errorf("project context not initialized")
 	}
 
 	entities := project.StructsImplementEntity()
+	// Optional entity filtering:
+	// - []string: explicit allow-list of struct names
+	// - func(internal.EntityInfo) bool: advanced/internal filtering
+	if v := ctx.Value(entityFilterKey); v != nil {
+		switch vv := v.(type) {
+		case []string:
+			allow := make(map[string]struct{}, len(vv))
+			for _, n := range vv {
+				n = strings.TrimSpace(n)
+				if n != "" {
+					allow[n] = struct{}{}
+				}
+			}
+			if len(allow) > 0 {
+				entities = lo.Filter(entities, func(e internal.EntityInfo, _ int) bool {
+					if e.TypeSpec == nil || e.TypeSpec.Name == nil {
+						return false
+					}
+					_, ok := allow[e.TypeSpec.Name.Name]
+					return ok
+				})
+			}
+		case func(internal.EntityInfo) bool:
+			entities = lo.Filter(entities, func(e internal.EntityInfo, _ int) bool {
+				return vv(e)
+			})
+		}
+	}
+
 	if len(entities) == 0 {
-		return fmt.Errorf("no entity structs found")
+		return nil, fmt.Errorf("no entity structs found")
+	}
+
+	metas := make([]EntityMeta, 0, len(entities))
+	for _, entityInfo := range entities {
+		structName := entityInfo.TypeSpec.Name.Name
+
+		fields, err := parseFields(entityInfo.Pkg, entityInfo.TypeSpec, "")
+		if err != nil {
+			return nil, err
+		}
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("no supported fields found for entity %s", structName)
+		}
+		fields = applyOrderPolicy(fields)
+
+		tableName, err := resolveTableName(project, entityInfo.PkgPath, structName)
+		if err != nil {
+			return nil, err
+		}
+
+		metas = append(metas, EntityMeta{
+			StructName: structName,
+			PkgPath:    entityInfo.PkgPath,
+			Pkg:        entityInfo.Pkg,
+			TypeSpec:   entityInfo.TypeSpec,
+			TableName:  tableName,
+			Fields:     fields,
+		})
+	}
+
+	if len(metas) == 0 {
+		return nil, fmt.Errorf("no entity structs found")
+	}
+	return metas, nil
+}
+
+func resolveTableName(project *internal.Project, pkgPath, structName string) (string, error) {
+	// default fallback
+	tableName := lo.SnakeCase(structName)
+
+	// Find Table() method receiver matching structName in that package.
+	for _, pkg := range project.Pkgs {
+		if pkg.PkgPath != pkgPath {
+			continue
+		}
+		for _, file := range pkg.Syntax {
+			ast.Inspect(file, func(n ast.Node) bool {
+				fn, ok := n.(*ast.FuncDecl)
+				if !ok || fn.Name == nil || fn.Name.Name != "Table" {
+					return true
+				}
+				if fn.Recv == nil || len(fn.Recv.List) == 0 {
+					return true
+				}
+
+				recvMatches := func(t ast.Expr) bool {
+					switch rt := t.(type) {
+					case *ast.StarExpr:
+						if ident, ok := rt.X.(*ast.Ident); ok {
+							return ident.Name == structName
+						}
+					case *ast.Ident:
+						return rt.Name == structName
+					}
+					return false
+				}
+
+				if !recvMatches(fn.Recv.List[0].Type) {
+					return true
+				}
+
+				// We only support: `return "..."` to keep it deterministic.
+				if fn.Body == nil || len(fn.Body.List) == 0 {
+					return true
+				}
+				ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
+				if !ok || len(ret.Results) == 0 {
+					return true
+				}
+				lit, ok := ret.Results[0].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return true
+				}
+				tableName = strings.Trim(lit.Value, `"`)
+				return false
+			})
+		}
+	}
+
+	return tableName, nil
+}
+
+// generateFieldsFromMeta generates field helpers from the precomputed entity metadata.
+func generateFieldsFromMeta(metas []EntityMeta) error {
+	project := internal.Current
+	if project == nil {
+		return fmt.Errorf("project context not initialized")
 	}
 
 	tmpl, err := template.New("fields").Parse(fieldsTmpl)
@@ -88,25 +294,14 @@ func generateFields() error {
 		return fmt.Errorf("failed to parse fields template: %w", err)
 	}
 
-	for _, entityInfo := range entities {
-		structName := entityInfo.TypeSpec.Name.Name
-		// For now, we assume a single adapter for parsing fields. This might need adjustment.
-		fields := parseFields(entityInfo.TypeSpec, "")
-		if len(fields) == 0 {
-			continue
-		}
-
-		imports := lo.Uniq(lo.FilterMap(fields, func(f Field, _ int) (string, bool) {
+	for _, meta := range metas {
+		imports := lo.Uniq(lo.FilterMap(meta.Fields, func(f Field, _ int) (string, bool) {
 			if strings.Contains(f.GoType, ".") {
 				pkg := strings.Split(f.GoType, ".")[0]
-				// This is a simple heuristic. A robust solution would inspect the package's imports.
-				// For now, we assume standard library packages.
 				switch pkg {
 				case "time":
 					return "time", true
 				default:
-					// We would need to resolve the full import path for external packages.
-					// This is a complex task, so we'll omit it for now.
 					return "", false
 				}
 			}
@@ -114,42 +309,41 @@ func generateFields() error {
 		}))
 
 		data := TemplateData{
-			PackageName:      strings.ToLower(structName),
-			StructName:       structName,
+			PackageName:      strings.ToLower(meta.StructName),
+			StructName:       meta.StructName,
 			Imports:          imports,
-			Fields:           fields,
+			Fields:           meta.Fields,
 			ModulePath:       internal.ToolModulePath(),
-			EntityImportPath: entityInfo.PkgPath,
+			EntityImportPath: meta.PkgPath,
 			GeneratedAt:      time.Now(),
 		}
 
-		// Define output path
 		outputDir := filepath.Join(project.GenPath(), "field", data.PackageName)
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 		}
-		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.go", data.PackageName))
+		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s_gen.go", data.PackageName))
 
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
-			return fmt.Errorf("failed to execute template for %s: %w", structName, err)
+			return fmt.Errorf("failed to execute template for %s: %w", meta.StructName, err)
 		}
 
 		formatted, err := format.Source(buf.Bytes())
 		if err != nil {
-			return fmt.Errorf("failed to format generated code for %s: %w", structName, err)
+			return fmt.Errorf("failed to format generated code for %s: %w", meta.StructName, err)
 		}
 
 		if err := os.WriteFile(outputPath, formatted, 0644); err != nil {
-			return fmt.Errorf("failed to write generated file for %s: %w", structName, err)
+			return fmt.Errorf("failed to write generated file for %s: %w", meta.StructName, err)
 		}
-		fmt.Printf("Generated field helpers for %s at %s\n", structName, outputPath)
+		fmt.Printf("Generated field helpers for %s at %s\n", meta.StructName, outputPath)
 	}
-
 	return nil
 }
 
-func generateSchema(ctx context.Context) error {
+// generateSchemaFromMeta generates schemas from the precomputed entity metadata.
+func generateSchemaFromMeta(ctx context.Context, metas []EntityMeta) error {
 	project := internal.Current
 	if project == nil {
 		return fmt.Errorf("project context not initialized")
@@ -160,15 +354,8 @@ func generateSchema(ctx context.Context) error {
 		return fmt.Errorf("no database adapters are configured or detected")
 	}
 
-	entities := project.StructsImplementEntity()
-	if len(entities) == 0 {
-		return fmt.Errorf("no entity structs found")
-	}
-
 	funcMap := template.FuncMap{
-		"plus1": func(i int) int {
-			return i + 1
-		},
+		"plus1": func(i int) int { return i + 1 },
 	}
 
 	tmpl, err := template.New("schema").Funcs(funcMap).Parse(schemaTmpl)
@@ -177,68 +364,14 @@ func generateSchema(ctx context.Context) error {
 	}
 
 	for _, adapter := range adapters {
-		for _, entityInfo := range entities {
-			structName := entityInfo.TypeSpec.Name.Name
-			fields := parseFields(entityInfo.TypeSpec, adapter)
+		for _, meta := range metas {
+			fields := enrichFieldsForAdapter(meta.Fields, adapter)
 			if len(fields) == 0 {
 				continue
 			}
 
-			// Reorder fields: PK first, then host fields, then embedded fields.
-			var pkField []Field
-			var hostFields []Field
-			var embeddedFields []Field
-
-			for _, f := range fields {
-				if f.IsPK {
-					pkField = append(pkField, f)
-				} else if f.IsEmbedded {
-					embeddedFields = append(embeddedFields, f)
-				} else {
-					hostFields = append(hostFields, f)
-				}
-			}
-			fields = append(pkField, hostFields...)
-			fields = append(fields, embeddedFields...)
-
-			tableName := lo.SnakeCase(structName)
-			// A simplified way to get the table name from the Table() method.
-			// This is fragile and assumes a specific method structure.
-			for _, pkg := range project.Pkgs {
-				if pkg.PkgPath == entityInfo.PkgPath {
-					for _, file := range pkg.Syntax {
-						ast.Inspect(file, func(n ast.Node) bool {
-							if fn, ok := n.(*ast.FuncDecl); ok && fn.Name.Name == "Table" {
-								if fn.Recv != nil && len(fn.Recv.List) > 0 {
-									if starExpr, ok := fn.Recv.List[0].Type.(*ast.StarExpr); ok {
-										if ident, ok := starExpr.X.(*ast.Ident); ok && ident.Name == structName {
-											if len(fn.Body.List) > 0 {
-												if ret, ok := fn.Body.List[0].(*ast.ReturnStmt); ok && len(ret.Results) > 0 {
-													if lit, ok := ret.Results[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-														tableName = strings.Trim(lit.Value, `"`)
-													}
-												}
-											}
-										}
-									} else if ident, ok := fn.Recv.List[0].Type.(*ast.Ident); ok && ident.Name == structName {
-										if len(fn.Body.List) > 0 {
-											if ret, ok := fn.Body.List[0].(*ast.ReturnStmt); ok && len(ret.Results) > 0 {
-												if lit, ok := ret.Results[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-													tableName = strings.Trim(lit.Value, `"`)
-												}
-											}
-										}
-									}
-								}
-							}
-							return true
-						})
-					}
-				}
-			}
-
 			data := SchemaTemplateData{
-				TableName:   tableName,
+				TableName:   meta.TableName,
 				Fields:      fields,
 				GeneratedAt: time.Now(),
 			}
@@ -247,27 +380,45 @@ func generateSchema(ctx context.Context) error {
 			if err := os.MkdirAll(outputDir, 0755); err != nil {
 				return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 			}
-			outputPath := filepath.Join(outputDir, fmt.Sprintf("%s_schema.sql", lo.SnakeCase(structName)))
+			outputPath := filepath.Join(outputDir, fmt.Sprintf("%s_schema.sql", lo.SnakeCase(meta.StructName)))
 
 			var buf bytes.Buffer
 			if err := tmpl.Execute(&buf, data); err != nil {
-				return fmt.Errorf("failed to execute schema template for %s: %w", structName, err)
+				return fmt.Errorf("failed to execute schema template for %s: %w", meta.StructName, err)
 			}
-
 			if err := os.WriteFile(outputPath, buf.Bytes(), 0644); err != nil {
-				return fmt.Errorf("failed to write generated schema for %s: %w", structName, err)
+				return fmt.Errorf("failed to write generated schema for %s: %w", meta.StructName, err)
 			}
-			fmt.Printf("Generated schema for %s at %s\n", structName, outputPath)
+			fmt.Printf("Generated schema for %s at %s\n", meta.StructName, outputPath)
 		}
 	}
 
 	return nil
 }
 
-func parseFields(spec *ast.TypeSpec, adapter string) []Field {
+// enrichFieldsForAdapter clones the base fields and fills DBType/PK warnings for the given adapter.
+// This avoids re-parsing AST/types multiple times.
+func enrichFieldsForAdapter(base []Field, adapter string) []Field {
+	fields := make([]Field, len(base))
+	copy(fields, base)
+	for i := range fields {
+		if fields[i].DBType == "" {
+			fields[i].DBType = sqlTypeFor(fields[i].GoType, adapter, driversJSON)
+		}
+		if fields[i].IsPK {
+			_, warning := pkConstraintFor(fields[i].GoType, fields[i].DBType, adapter, driversJSON)
+			fields[i].Warning = warning
+		}
+	}
+	return fields
+}
+
+func parseFields(pkg *packages.Package, spec *ast.TypeSpec, adapter string) ([]Field, error) {
+	// NOTE: adapter is intentionally ignored now; adapter-specific typing happens in enrichFieldsForAdapter.
+	_ = adapter
 	structType, ok := spec.Type.(*ast.StructType)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	var fields []Field
@@ -283,7 +434,10 @@ func parseFields(spec *ast.TypeSpec, adapter string) []Field {
 
 			if ident != nil && ident.Obj != nil && ident.Obj.Kind == ast.Typ {
 				if embeddedSpec, ok := ident.Obj.Decl.(*ast.TypeSpec); ok {
-					embeddedFields := parseFields(embeddedSpec, adapter)
+					embeddedFields, err := parseFields(pkg, embeddedSpec, adapter)
+					if err != nil {
+						return nil, err
+					}
 					for i := range embeddedFields {
 						embeddedFields[i].IsEmbedded = true
 					}
@@ -295,6 +449,21 @@ func parseFields(spec *ast.TypeSpec, adapter string) []Field {
 
 		if !field.Names[0].IsExported() {
 			continue // Skip private fields
+		}
+
+		// Check if the field is a struct type that should be skipped
+		if tv, ok := pkg.TypesInfo.Types[field.Type]; ok {
+			if !isSupportedType(tv.Type) {
+				if _, ok := tv.Type.Underlying().(*types.Struct); !ok {
+					return nil, fmt.Errorf("unsupported field type %s for field %s", tv.Type.String(), field.Names[0].Name)
+				}
+			}
+			if _, ok := tv.Type.Underlying().(*types.Struct); ok {
+				// Allow time.Time, but skip other structs
+				if tv.Type.String() != "time.Time" {
+					continue
+				}
+			}
 		}
 
 		xqlTag := ""
@@ -323,20 +492,9 @@ func parseFields(spec *ast.TypeSpec, adapter string) []Field {
 
 		parseDirectives(xqlTag, &entityField)
 
-		if adapter != "" {
-			if entityField.DBType == "" {
-				entityField.DBType = sqlTypeFor(entityField.GoType, adapter, driversJSON)
-			}
-
-			if entityField.IsPK {
-				_, warning := pkConstraintFor(entityField.GoType, entityField.DBType, adapter, driversJSON)
-				entityField.Warning = warning
-			}
-		}
-
 		fields = append(fields, entityField)
 	}
-	return fields
+	return fields, nil
 }
 
 func parseDirectives(tag string, field *Field) {
@@ -458,3 +616,5 @@ func pkConstraintFor(goType string, sqlType string, adapter string, driversJSON 
 	}
 	return "", ""
 }
+
+var _ = errors.New

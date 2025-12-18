@@ -1,10 +1,10 @@
 {
   "ID": "entity.Field[Order, int64](\"ID\")",
+  "AccountID": "entity.Field[Order, int64](\"AccountID\")",
+  "Amount": "entity.Field[Order, float64](\"Amount\")",
   "CreatedAt": "entity.Field[Order, time.Time](\"CreatedAt\")",
   "UpdatedAt": "entity.Field[Order, time.Time](\"UpdatedAt\")",
   "CreatedBy": "entity.Field[Order, string](\"CreatedBy\")",
-  "UpdatedBy": "entity.Field[Order, string](\"UpdatedBy\")",
-  "AccountID": "entity.Field[Order, int64](\"AccountID\")",
-  "Amount": "entity.Field[Order, float64](\"Amount\")"
+  "UpdatedBy": "entity.Field[Order, string](\"UpdatedBy\")"
 }
 

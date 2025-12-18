@@ -1,9 +1,0 @@
-{
-  "ID": "entity.Field[Account, int64](\"ID\")",
-  "Email": "entity.Field[Account, string](\"Email\")",
-  "Nickname": "entity.Field[Account, string](\"Nickname\")",
-  "Balance": "entity.Field[Account, float64](\"Balance\")",
-  "CreatedAt": "entity.Field[Account, time.Time](\"CreatedAt\")",
-  "UpdatedAt": "entity.Field[Account, time.Time](\"UpdatedAt\")"
-}
-

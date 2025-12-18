@@ -164,6 +164,7 @@ func ToolEntityInterface() string {
 type EntityInfo struct {
 	TypeSpec *ast.TypeSpec
 	PkgPath  string
+	Pkg      *packages.Package
 }
 
 // StructsImplementEntity finds all structs in the project that implement the
@@ -196,13 +197,17 @@ func (p *Project) StructsImplementEntity() []EntityInfo {
 		for _, file := range pkg.Syntax {
 			ast.Inspect(file, func(n ast.Node) bool {
 				if ts, ok := n.(*ast.TypeSpec); ok {
+					// Only consider concrete struct types as entity implementers.
+					if _, ok := ts.Type.(*ast.StructType); !ok {
+						return true
+					}
 					// Use types info to check if the type implements the interface
 					obj := pkg.TypesInfo.Defs[ts.Name]
 					if obj == nil {
 						return true
 					}
 					if types.Implements(types.NewPointer(obj.Type()), entityInterface) || types.Implements(obj.Type(), entityInterface) {
-						implementers = append(implementers, EntityInfo{TypeSpec: ts, PkgPath: pkg.PkgPath})
+						implementers = append(implementers, EntityInfo{TypeSpec: ts, PkgPath: pkg.PkgPath, Pkg: pkg})
 					}
 				}
 				return true

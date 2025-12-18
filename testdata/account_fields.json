@@ -1,11 +1,11 @@
 {
   "ID": "entity.Field[Account, int64](\"ID\")",
+  "Email": "entity.Field[Account, string](\"Email\")",
+  "Nickname": "entity.Field[Account, string](\"Nickname\")",
+  "Balance": "entity.Field[Account, float64](\"Balance\")",
   "CreatedAt": "entity.Field[Account, time.Time](\"CreatedAt\")",
   "UpdatedAt": "entity.Field[Account, time.Time](\"UpdatedAt\")",
   "CreatedBy": "entity.Field[Account, string](\"CreatedBy\")",
-  "UpdatedBy": "entity.Field[Account, string](\"UpdatedBy\")",
-  "Email": "entity.Field[Account, string](\"Email\")",
-  "Nickname": "entity.Field[Account, string](\"Nickname\")",
-  "Balance": "entity.Field[Account, float64](\"Balance\")"
+  "UpdatedBy": "entity.Field[Account, string](\"UpdatedBy\")"
 }
 

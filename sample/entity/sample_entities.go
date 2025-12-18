@@ -2,6 +2,10 @@ package entity
 
 import "time"
 
+type Dummy struct {
+	TestingName string
+}
+
 // BaseEntity defines common fields for database entities.
 type BaseEntity struct {
 	ID        int64 `xql:"pk"`
@@ -14,6 +18,7 @@ type BaseEntity struct {
 // Account represents a user account in the system.
 type Account struct {
 	BaseEntity
+	Dummy    Dummy
 	Email    string `xql:"unique;index"`
 	Nickname string `xql:"name:nick_name;type:varchar(100);unique;not null;default:'anonymous'"`
 	Balance  float64
@@ -26,6 +31,7 @@ func (a Account) Table() string {
 // Order represents a customer order.
 type Order struct {
 	BaseEntity
+	Dummy         Dummy
 	AccountID     int64
 	Amount        float64
 	internalNotes string

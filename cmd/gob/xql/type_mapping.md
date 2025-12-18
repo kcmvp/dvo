@@ -147,6 +147,88 @@ The `xql` tool infers a default mapping from the Go field's type. You can overri
 
 ---
 
+## Column & Field Ordering
+
+The generator applies a consistent ordering policy for both generated Go fields and database columns to ensure predictability. The order is determined as follows:
+
+1.  **Primary Key Fields**: Any field marked with `xql:"pk"` is always placed first. If there are multiple primary keys, their relative order is preserved.
+2.  **Host Struct Fields**: Non-primary key fields from the main struct are placed next, in the order they are defined in the struct.
+3.  **Embedded Struct Fields**: Fields from embedded structs are placed last. The fields from each embedded struct are grouped together, and their original relative order is maintained.
+
+### Example
+
+Consider the following entity definition:
+
+```go
+package model
+
+import "time"
+
+// BaseModel contains common columns.
+type BaseModel struct {
+    ID        int64     `xql:"pk"`
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+
+// User demonstrates field ordering.
+type User struct {
+    Email     string `xql:"type:varchar(255);unique"`
+    BaseModel // Embed the common columns
+    Nickname  string
+}
+```
+
+The generated fields and columns for the `User` entity will be in this order:
+
+1.  `ID` (from `BaseModel`, moved to the front because it's a primary key)
+2.  `Email` (from `User` struct)
+3.  `Nickname` (from `User` struct)
+4.  `CreatedAt` (from `BaseModel`, embedded)
+5.  `UpdatedAt` (from `BaseModel`, embedded)
+
+
+## Reuse common database columns
+
+To promote consistency and reduce duplication, you can define common columns in a separate struct and embed it in your entity models. This is particularly useful for fields like `ID`, `CreatedAt`, and `UpdatedAt` that appear in most tables.
+
+When the generator encounters an embedded struct, it treats its fields as if they were part of the parent struct.
+
+### Example
+
+First, define a struct with the common columns. Note that this struct does not need to implement `entity.Entity` itself.
+
+```go
+package model
+
+import "time"
+
+// BaseModel contains common columns for all tables.
+type BaseModel struct {
+    ID        int64     `xql:"pk"`
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+```
+
+Next, embed `BaseModel` in your entity structs.
+
+```go
+package model
+
+// User is a product in our application.
+type User struct {
+    BaseModel // Embed the common columns
+    Email     string `xql:"type:varchar(255);unique;not null"`
+    Nickname  string
+}
+
+func (User) Table() string { return "users" }
+```
+
+When `xql schema` is run, the generated `users` table will include `id`, `created_at`, `updated_at`, `email`, and `nickname` columns. The primary key and default naming rules apply to the embedded fields as well.
+
+
 ## TODO
 ### Customized data types
 - We should update `FieldType` in `constraint/constraint.go` to support a wider range of types. The current definition is too restrictive and does not handle 

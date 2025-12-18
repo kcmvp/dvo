@@ -3,6 +3,7 @@ package xql
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	_ "embed"
 
@@ -17,6 +18,8 @@ const (
 	// dbaAdapterKey is the context key used to store the detected DB adapter
 	// for xql subcommands.
 	dbaAdapterKey = "xql.dbAdapter"
+	// entityFilterKey is the context key used to store the entity filter function.
+	entityFilterKey = "xql.entityFilter"
 )
 
 //go:embed resources/drivers.json
@@ -69,10 +72,20 @@ var XqlCmd = &cobra.Command{
 }
 
 var schemaCmd = &cobra.Command{
-	Use:   "schema",
-	Short: "Generate schemas for all entities.",
+	Use:   "schema [entities...]",
+	Short: "Generate schemas for all entities, or for a subset by passing space-separated entity names (e.g. `xql schema Account Order`).",
+	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return Generate(cmd.Context())
+		ctx := cmd.Context()
+		// Cobra already splits args by spaces. We keep it simple and treat each arg as an entity name.
+		names := lo.Uniq(lo.FilterMap(args, func(a string, _ int) (string, bool) {
+			a = strings.TrimSpace(a)
+			return a, a != ""
+		}))
+		if len(names) > 0 {
+			ctx = context.WithValue(ctx, entityFilterKey, names)
+		}
+		return generate(ctx)
 	},
 }
 

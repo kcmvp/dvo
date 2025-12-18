@@ -87,21 +87,25 @@ func TestGeneration(t *testing.T) {
 
 	// Create a context with database adapters
 	ctx := context.WithValue(context.Background(), dbaAdapterKey, []string{"sqlite", "postgres", "mysql"})
+	filter := func(e internal.EntityInfo) bool {
+		return e.TypeSpec != nil && e.TypeSpec.Name != nil && !strings.HasPrefix(e.TypeSpec.Name.Name, "Negative")
+	}
+	ctx = context.WithValue(ctx, entityFilterKey, filter)
 
-	// Run the generator
-	err := Generate(ctx)
+	err := generate(ctx)
 	require.NoError(t, err)
+
 	testDataDir := filepath.Join(internal.Current.Root, "testdata")
 
 	// Verify the output for Account fields
 	compareGoFileWithJSON(t,
-		filepath.Join(internal.Current.GenPath(), "field", "account", "account.go"),
+		filepath.Join(internal.Current.GenPath(), "field", "account", "account_gen.go"),
 		filepath.Join(testDataDir, "account_fields.json"),
 	)
 
 	// Verify the output for Order fields
 	compareGoFileWithJSON(t,
-		filepath.Join(internal.Current.GenPath(), "field", "order", "order.go"),
+		filepath.Join(internal.Current.GenPath(), "field", "order", "order_gen.go"),
 		filepath.Join(testDataDir, "order_fields.json"),
 	)
 
@@ -115,5 +119,39 @@ func TestGeneration(t *testing.T) {
 			filepath.Join(internal.Current.GenPath(), "schemas", db, "order_schema.sql"),
 			filepath.Join(testDataDir, db, "order_schema.sql"),
 		)
+	}
+	t.Log("test finished")
+}
+
+func TestNegativeGeneration(t *testing.T) {
+	// Ensure the project is initialized
+	require.NotNil(t, internal.Current, "internal.Current should be initialized")
+
+	all := internal.Current.StructsImplementEntity()
+	negatives := make([]internal.EntityInfo, 0)
+	for _, e := range all {
+		if e.TypeSpec == nil || e.TypeSpec.Name == nil {
+			continue
+		}
+		if strings.HasPrefix(e.TypeSpec.Name.Name, "Negative") {
+			negatives = append(negatives, e)
+		}
+	}
+	if len(negatives) == 0 {
+		t.Skip("no Negative* entities found")
+	}
+
+	for _, e := range negatives {
+		e := e
+		name := e.TypeSpec.Name.Name
+		t.Run(name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), dbaAdapterKey, []string{"sqlite", "postgres", "mysql"})
+			// Limit generation to this one entity so we can verify every negative case independently.
+			ctx = context.WithValue(ctx, entityFilterKey, []string{name})
+
+			err := generate(ctx)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unsupported field type")
+		})
 	}
 }
