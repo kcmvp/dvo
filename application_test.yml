@@ -1,0 +1,70 @@
+# Example configuration for sqlx package auto-registration.
+# NOTE: this file is primarily for local dev/tests.
+#
+# The sqlx package reads `datasource` and will initialize connections lazily when you call:
+#   - sqlx.DefaultDS()
+#   - sqlx.GetDS(name)
+#
+# Supported placeholders in `url` (optional):
+#   - ${user}
+#   - ${password}
+#   - ${host}
+# NOTE: If `url` contains placeholders, the corresponding fields must be non-empty.
+
+# -----------------------------------------------------------------------------
+# Default (SQLite) - used by tests
+# -----------------------------------------------------------------------------
+
+datasource:
+  DefaultDS:
+    driver: sqlite3
+    # In-memory SQLite; shared cache allows multiple connections.
+    url: "file::memory:?cache=shared"
+
+# -----------------------------------------------------------------------------
+# MySQL example (commented)
+# -----------------------------------------------------------------------------
+#datasource:
+#  DefaultDS:
+#    driver: mysql
+#    user: root
+#    password: "your_password"
+#    host: "127.0.0.1:3306"
+#    # NOTE: url is a DSN template; placeholders are replaced by sqlx.
+#    url: "${user}:${password}@tcp(${host})/your_db?parseTime=true&loc=Local"
+
+# -----------------------------------------------------------------------------
+# PostgreSQL example (commented)
+# -----------------------------------------------------------------------------
+#datasource:
+#  DefaultDS:
+#    driver: postgres
+#    user: postgres
+#    password: "your_password"
+#    host: "127.0.0.1:5432"
+#    # lib/pq style DSN via URL template
+#    url: "postgres://${user}:${password}@${host}/your_db?sslmode=disable"
+
+# -----------------------------------------------------------------------------
+# Multiple datasources example (commented)
+# -----------------------------------------------------------------------------
+#datasource:
+#  # Primary DB (MySQL)
+#  Primary:
+#    driver: mysql
+#    user: root
+#    password: "your_password"
+#    host: "127.0.0.1:3306"
+#    url: "${user}:${password}@tcp(${host})/primary_db?parseTime=true&loc=Local"
+#
+#  # Reporting DB (PostgreSQL)
+#  Reporting:
+#    driver: postgres
+#    user: postgres
+#    password: "your_password"
+#    host: "127.0.0.1:5432"
+#    url: "postgres://${user}:${password}@${host}/reporting_db?sslmode=disable"
+#
+# Usage:
+#   db1, _ := sqlx.GetDS("Primary")
+#   db2, _ := sqlx.GetDS("Reporting")

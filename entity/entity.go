@@ -12,21 +12,20 @@ type Entity interface {
 	Table() string
 }
 
-// ViewFieldProvider is a non-generic interface that all entity.FieldProvider[E] instances satisfy.
-// It is used to accept fields from different entities in functions like joins.
+// JoinFieldProvider is a non-generic interface that all entity.FieldProvider[E] instances satisfy.
+// It is used to accept fields from different entities in join queries.
 // The unexported method ensures that only types from this package can implement it.
-type ViewFieldProvider interface {
+type JoinFieldProvider interface {
 	dvo.FieldProvider
 	QualifiedName() string
 	seal()
 }
 
 // FieldProvider is a generic marker interface for fields that carry persistence metadata.
-// It embeds the sealed ViewFieldProvider interface.
+// It embeds the sealed JoinFieldProvider interface.
 type FieldProvider[E Entity] interface {
-	ViewFieldProvider
+	JoinFieldProvider
 }
-
 
 // persistentField is the private generic struct that implements FieldProvider.
 type persistentField[E Entity] struct {
@@ -34,7 +33,7 @@ type persistentField[E Entity] struct {
 	table string
 }
 
-// seal is a marker method to satisfy the ViewFieldProvider interface.
+// seal is a marker method to satisfy the JoinFieldProvider interface.
 func (f persistentField[E]) seal() {}
 
 // QualifiedName constructs the fully qualified "table.column" name at runtime.
