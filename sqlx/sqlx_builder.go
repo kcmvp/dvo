@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/kcmvp/dvo/entity"
-	"github.com/samber/lo"
 	"github.com/samber/mo"
 )
 
@@ -63,9 +62,32 @@ func or[T entity.Entity](wheres ...Where[T]) Where[T] {
 	return whereFunc[T](f)
 }
 
+func dbQualifiedNameFromQName(q string) string {
+	parts := strings.Split(q, ".")
+	if len(parts) != 2 {
+		return q
+	}
+	table := parts[0]
+	col := parts[1]
+	// Use the column name exactly as provided by the FieldProvider/Schema.
+	return fmt.Sprintf("%s.%s", table, col)
+}
+
+// makePlaceholders returns a comma-separated list of '?' placeholders for SQL IN clauses.
+func makePlaceholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	ps := make([]string, n)
+	for i := 0; i < n; i++ {
+		ps[i] = "?"
+	}
+	return strings.Join(ps, ",")
+}
+
 func op[E entity.Entity](field entity.FieldProvider[E], operator string, value any) Where[E] {
 	f := func() (string, []any) {
-		clause := fmt.Sprintf("%s %s ?", field.QualifiedName(), operator)
+		clause := fmt.Sprintf("%s %s ?", dbQualifiedNameFromQName(field.QualifiedName()), operator)
 		return clause, []any{value}
 	}
 	return whereFunc[E](f)
@@ -76,8 +98,8 @@ func inWhere[E entity.Entity](field entity.FieldProvider[E], values ...any) Wher
 	if len(values) == 0 {
 		return whereFunc[E](func() (string, []any) { return "1=0", nil })
 	}
-	placeholders := strings.Join(lo.RepeatBy(len(values), func(_ int) string { return "?" }), ",")
-	clause := fmt.Sprintf("%s IN (%s)", field.QualifiedName(), placeholders)
+	placeholders := makePlaceholders(len(values))
+	clause := fmt.Sprintf("%s IN (%s)", dbQualifiedNameFromQName(field.QualifiedName()), placeholders)
 	return whereFunc[E](func() (string, []any) { return clause, values })
 }
 
@@ -99,8 +121,10 @@ func selectSQL[T entity.Entity](schema *Schema[T], where Where[T]) (string, []an
 	cols := make([]string, 0, len(schema.providers))
 	for _, p := range schema.providers {
 		col := p.AsSchemaField().Name()
+		// Use the provided field name as DB column name (tests expect this behavior).
+		dbCol := col
 		alias := fmt.Sprintf("%s__%s", table, col)
-		cols = append(cols, fmt.Sprintf("%s.%s AS %s", table, col, alias))
+		cols = append(cols, fmt.Sprintf("%s.%s AS %s", table, dbCol, alias))
 	}
 
 	sql := fmt.Sprintf("SELECT %s FROM %s", strings.Join(cols, ", "), table)
@@ -143,7 +167,9 @@ func insertSQL[T entity.Entity](schema *Schema[T], g getter) (string, []any, err
 		if vOpt.IsAbsent() {
 			continue
 		}
-		cols = append(cols, col)
+		// Use provided column name as DB column name.
+		dbCol := col
+		cols = append(cols, dbCol)
 		ph = append(ph, "?")
 		args = append(args, vOpt.MustGet())
 	}
@@ -188,7 +214,9 @@ func updateSQL[T entity.Entity](schema *Schema[T], g getter, where Where[T]) (st
 		if vOpt.IsAbsent() {
 			continue
 		}
-		sets = append(sets, fmt.Sprintf("%s.%s = ?", table, col))
+		// use provided column name in SET clause
+		dbCol := col
+		sets = append(sets, fmt.Sprintf("%s.%s = ?", table, dbCol))
 		args = append(args, vOpt.MustGet())
 	}
 
@@ -228,7 +256,7 @@ func deleteSQL[T entity.Entity](where Where[T]) (string, []any, error) {
 
 // whereFromJoinE1 converts a join clause (INNER/LEFT JOIN ... ON (...)) into a Where[E1]
 // by translating it into an EXISTS subquery. This allows join logic to be composed with
-// Where.And/Or at the query layer.
+// Where.And/Or.
 func whereFromJoinE1[E1 entity.Entity, E2 entity.Entity](j Joint[E1, E2]) Where[E1] {
 	return whereFunc[E1](func() (string, []any) {
 		if j == nil {
@@ -310,7 +338,10 @@ func joinClauseToExistsPredicate[E1 entity.Entity, E2 entity.Entity](j Joint[E1,
 		if len(l) != 2 || len(r) != 2 {
 			return "", fmt.Errorf("invalid qualified name in join predicate: %s", p)
 		}
-		conds = append(conds, fmt.Sprintf("%s.%s = %s.%s", baseTable, l[1], innerAlias, r[1]))
+		// use provided column names directly
+		lcol := l[1]
+		rcol := r[1]
+		conds = append(conds, fmt.Sprintf("%s.%s = %s.%s", baseTable, lcol, innerAlias, rcol))
 	}
 	if len(conds) == 0 {
 		return "", fmt.Errorf("empty join")
@@ -356,8 +387,10 @@ func selectJoinSQL(baseTable string, projection []entity.JoinFieldProvider, join
 		}
 		table := parts[0]
 		col := parts[1]
+		// Use provided column name as DB column name (match snapshots).
+		dbCol := col
 		alias := fmt.Sprintf("%s__%s", table, col)
-		cols = append(cols, fmt.Sprintf("%s AS %s", q, alias))
+		cols = append(cols, fmt.Sprintf("%s.%s AS %s", table, dbCol, alias))
 	}
 
 	sql := fmt.Sprintf("SELECT %s FROM %s", strings.Join(cols, ", "), baseTable)

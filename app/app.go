@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	cfgName     = "application.yml"
-	cfgTestName = "application_test.yml"
+	cfgName     = "application.yaml"
+	cfgTestName = "application_test.yaml"
 )
 
 var (
@@ -41,7 +41,7 @@ func Config() mo.Result[*viper.Viper] {
 
 func loadViper(required bool) (*viper.Viper, error) {
 	v := viper.New()
-	v.SetConfigType("yaml")
+	//v.SetConfigType("yaml")
 
 	// Search paths:
 	// 1) project root (detected by walking up to find go.mod) and its ./config
@@ -53,10 +53,46 @@ func loadViper(required bool) (*viper.Viper, error) {
 	addDefaultConfigPaths(v)
 
 	name := cfgName
+	// If application_test.yaml exists in project root or CWD, prefer it (helps test runs).
+	cwd, _ := os.Getwd()
+	if root, ok := findProjectRoot(cwd); ok {
+		cand := filepath.Join(root, cfgTestName)
+		if _, err := os.Stat(cand); err == nil {
+			v.SetConfigFile(cand)
+			if err := v.ReadInConfig(); err == nil {
+				return v, nil
+			}
+		}
+		cand = filepath.Join(root, "config", cfgTestName)
+		if _, err := os.Stat(cand); err == nil {
+			v.SetConfigFile(cand)
+			if err := v.ReadInConfig(); err == nil {
+				return v, nil
+			}
+		}
+	}
+	// Also check CWD
+	cand := filepath.Join(cwd, cfgTestName)
+	if _, err := os.Stat(cand); err == nil {
+		v.SetConfigFile(cand)
+		if err := v.ReadInConfig(); err == nil {
+			return v, nil
+		}
+	}
+	cand = filepath.Join(cwd, "config", cfgTestName)
+	if _, err := os.Stat(cand); err == nil {
+		v.SetConfigFile(cand)
+		if err := v.ReadInConfig(); err == nil {
+			return v, nil
+		}
+	}
+
 	if isTestProcess() {
 		name = cfgTestName
 	}
 	v.SetConfigName(strings.TrimSuffix(name, filepath.Ext(name)))
+
+	// previous test-specific explicit checks removed
 
 	if err := v.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError

@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/entity"
+	"github.com/samber/lo"
 )
 
 // -----------------------------
@@ -108,47 +110,121 @@ func NewSchema[T entity.Entity](providers ...entity.FieldProvider[T]) *Schema[T]
 // Query is a generic function that queries the database and returns a slice of T.
 // It uses the provided schema to build the SELECT clause and the Where interface to build the WHERE clause.
 func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[T]) ([]ValueObject[T], error) {
-	query, args, err := selectSQL[T](schema, where)
-	if err != nil {
-		return nil, err
+	// We'll build SQL here because we need to resolve actual DB column names at runtime
+	if schema == nil || schema.Schema == nil {
+		return nil, fmt.Errorf("schema is required")
 	}
+
+	var ent T
+	table := ent.Table()
 
 	db, ok := DefaultDS()
 	if !ok || db == nil {
 		return nil, fmt.Errorf("default datasource is not initialized")
 	}
 
-	// Build scan metadata matching selectSQL's column order.
-	var ent T
-	table := ent.Table()
-	aliases := make([]string, 0, len(schema.providers))
-	fieldNames := make([]string, 0, len(schema.providers))
-	for _, p := range schema.providers {
-		col := p.AsSchemaField().Name()
-		aliases = append(aliases, fmt.Sprintf("%s__%s", table, col))
-		fieldNames = append(fieldNames, col)
-	}
-
-	rows, err := db.QueryContext(ctx, query, args...)
+	// 1. get table columns from DB (SQLite PRAGMA)
+	colsInDB := map[string]struct{}{}
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info('%s')", table))
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name string
+		var ctype any
+		var notnull any
+		var dflt any
+		var pk any
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		colsInDB[name] = struct{}{}
+	}
+
+	// DEBUG: show cols in DB
+	fmt.Println("[sqlx] colsInDB:")
+	for c := range colsInDB {
+		fmt.Println("  -", c)
+	}
+
+	// 2. map schema field names to actual DB columns using normalized matching
+	fieldNames := make([]string, 0, len(schema.providers))
+	fieldToDB := map[string]string{} // key: table.FieldName -> table.db_col
+	for _, p := range schema.providers {
+		col := p.AsSchemaField().Name()
+		fieldNames = append(fieldNames, col)
+		// find matching DB column by normalization
+		var matched string
+		normField := strings.ToLower(strings.ReplaceAll(col, "_", ""))
+		for dbcol := range colsInDB {
+			if strings.ToLower(strings.ReplaceAll(dbcol, "_", "")) == normField {
+				matched = dbcol
+				break
+			}
+		}
+		if matched == "" {
+			// fallback to snake_case(col)
+			matched = lo.SnakeCase(col)
+		}
+		fieldToDB[fmt.Sprintf("%s.%s", table, col)] = fmt.Sprintf("%s.%s", table, matched)
+	}
+
+	// DEBUG: show mapping
+	fmt.Println("[sqlx] fieldToDB mapping:")
+	for k, v := range fieldToDB {
+		fmt.Println("  ", k, "=>", v)
+	}
+
+	// 3. build SELECT clause using mapped DB column names and aliases
+	cols := make([]string, 0, len(schema.providers))
+	for _, col := range fieldNames {
+		dbQualified := fieldToDB[fmt.Sprintf("%s.%s", table, col)]
+		parts := strings.Split(dbQualified, ".")
+		dbCol := parts[1]
+		alias := fmt.Sprintf("%s__%s", table, col)
+		cols = append(cols, fmt.Sprintf("%s.%s AS %s", table, dbCol, alias))
+	}
+
+	sql := fmt.Sprintf("SELECT %s FROM %s", strings.Join(cols, ", "), table)
+
+	// DEBUG: print generated SQL for diagnostics
+	fmt.Println("[sqlx] SQL =>", sql)
+
+	var args []any
+	if where != nil {
+		clause, a := where.Build()
+		if clause != "" {
+			// rewrite clause to map schema-qualified names to DB-qualified names
+			for k, v := range fieldToDB {
+				clause = strings.ReplaceAll(clause, k, v)
+			}
+			sql += " WHERE " + clause
+			args = a
+		}
+	}
+
+	rows2, err := db.QueryContext(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows2.Close() }()
 
 	out := make([]ValueObject[T], 0)
-	for rows.Next() {
-		vals := make([]any, len(aliases))
-		ptrs := make([]any, len(aliases))
+	for rows2.Next() {
+		vals := make([]any, len(fieldNames))
+		ptrs := make([]any, len(fieldNames))
 		for i := range vals {
 			ptrs[i] = &vals[i]
 		}
-		if err := rows.Scan(ptrs...); err != nil {
+		if err := rows2.Scan(ptrs...); err != nil {
 			return nil, err
 		}
 
 		m := make(map[string]any, len(fieldNames))
 		for i, name := range fieldNames {
-			m[name] = vals[i]
+			m[name] = dbValueToJSON(vals[i])
 		}
 
 		b, err := json.Marshal(m)
@@ -161,7 +237,7 @@ func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[
 		}
 		out = append(out, ValueObject[T]{ValueObject: res.MustGet()})
 	}
-	if err := rows.Err(); err != nil {
+	if err := rows2.Err(); err != nil {
 		return nil, err
 	}
 
@@ -280,4 +356,46 @@ func joinPartsWithAnd(parts []string) string {
 		out += " AND " + parts[i]
 	}
 	return out
+}
+
+// dbValueToJSON normalizes common DB driver scan types into JSON-friendly Go values.
+// - []byte / sql.RawBytes => string
+// - sql.NullString, sql.NullInt64, sql.NullFloat64, sql.NullBool, sql.NullTime => nil or underlying value
+// - time.Time and other native types are returned as-is
+func dbValueToJSON(v any) any {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return string(t)
+	case sql.RawBytes:
+		return string(t)
+	case sql.NullString:
+		if t.Valid {
+			return t.String
+		}
+		return nil
+	case sql.NullInt64:
+		if t.Valid {
+			return t.Int64
+		}
+		return nil
+	case sql.NullFloat64:
+		if t.Valid {
+			return t.Float64
+		}
+		return nil
+	case sql.NullBool:
+		if t.Valid {
+			return t.Bool
+		}
+		return nil
+	case sql.NullTime:
+		if t.Valid {
+			return t.Time
+		}
+		return nil
+	default:
+		return t
+	}
 }

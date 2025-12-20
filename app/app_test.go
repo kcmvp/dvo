@@ -27,5 +27,5 @@ func TestInit_LoadsApplicationTestYml(t *testing.T) {
 	require.NotNil(t, v)
 
 	// This value comes from application_test.yml
-	require.Equal(t, "sqlite3", v.GetString("datasource.DefaultDS.driver"))
+	require.Equal(t, "sqlite3", v.GetString("datasource.default.driver"))
 }

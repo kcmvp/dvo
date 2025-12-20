@@ -102,10 +102,10 @@ func SetSQLLogger(l *log.Logger) {
 }
 
 const (
-	UserKey       = "${user}"
-	PasswordKey   = "${password}"
-	HostKey       = "${host}"
-	defaultDSName = "DefaultDS"
+	UserKey     = "${user}"
+	PasswordKey = "${password}"
+	HostKey     = "${host}"
+	defaultDs   = "default"
 )
 
 type dataSource struct {
@@ -158,10 +158,10 @@ func (ds dataSource) DSN() string {
 }
 
 // registerDataSource opens a database connection from cfg and registers it under the provided name.
-// If name is empty, defaultDSName is used. The function will Ping the DB to validate the connection.
+// If name is empty, default is used. The function will Ping the DB to validate the connection.
 func registerDataSource(name string, cfg dataSource) error {
 	if name == "" {
-		name = defaultDSName
+		name = defaultDs
 	}
 	if cfg.Driver == "" {
 		return fmt.Errorf("driver is required to register datasource %q", name)
@@ -188,7 +188,7 @@ func registerDataSource(name string, cfg dataSource) error {
 	dsMu.Lock()
 	defer dsMu.Unlock()
 	dsRegistry[name] = db
-	if name == defaultDSName && defaultDS == nil {
+	if name == defaultDs && defaultDS == nil {
 		defaultDS = db
 	}
 	return nil
@@ -238,7 +238,7 @@ func initDataSources() error {
 func GetDS(name string) (DB, bool) {
 	_ = initDataSources()
 	if name == "" {
-		name = defaultDSName
+		name = defaultDs
 	}
 	dsMu.RLock()
 	defer dsMu.RUnlock()
@@ -252,7 +252,7 @@ func DefaultDS() (DB, bool) {
 	dsMu.RLock()
 	defer dsMu.RUnlock()
 	if defaultDS == nil {
-		db, ok := dsRegistry[defaultDSName]
+		db, ok := dsRegistry[defaultDs]
 		return db, ok
 	}
 	return defaultDS, true
@@ -261,7 +261,7 @@ func DefaultDS() (DB, bool) {
 // CloseDataSource closes and removes the named datasource from the registry.
 func CloseDataSource(name string) error {
 	if name == "" {
-		name = defaultDSName
+		name = defaultDs
 	}
 	dsMu.Lock()
 	defer dsMu.Unlock()
@@ -272,16 +272,17 @@ func CloseDataSource(name string) error {
 	return nil
 }
 
-// CloseAllDataSources closes all registered datasources and clears the registry.
+// CloseAllDataSources closes and removes all registered datasources from the registry.
+// It returns the first error encountered while closing any datasource, or nil on success.
 func CloseAllDataSources() error {
 	dsMu.Lock()
 	defer dsMu.Unlock()
 	var firstErr error
-	for k, db := range dsRegistry {
+	for name, db := range dsRegistry {
 		if err := db.Close(); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("close %s: %w", k, err)
+			firstErr = err
 		}
-		delete(dsRegistry, k)
+		delete(dsRegistry, name)
 	}
 	defaultDS = nil
 	return firstErr

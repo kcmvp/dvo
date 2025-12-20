@@ -113,11 +113,11 @@ func TestGeneration(t *testing.T) {
 	for _, db := range []string{"sqlite", "postgres", "mysql"} {
 		compareFiles(t,
 			filepath.Join(internal.Current.GenPath(), "schemas", db, "account_schema.sql"),
-			filepath.Join(testDataDir, db, "account_schema.sql"),
+			filepath.Join(testDataDir, "schemas", db, "account_schema.sql"),
 		)
 		compareFiles(t,
 			filepath.Join(internal.Current.GenPath(), "schemas", db, "order_schema.sql"),
-			filepath.Join(testDataDir, db, "order_schema.sql"),
+			filepath.Join(testDataDir, "schemas", db, "order_schema.sql"),
 		)
 	}
 	t.Log("test finished")

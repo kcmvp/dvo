@@ -16,10 +16,15 @@
 # -----------------------------------------------------------------------------
 
 datasource:
-  DefaultDS:
+  default:
     driver: sqlite3
     # In-memory SQLite; shared cache allows multiple connections.
     url: "file::memory:?cache=shared"
+
+# Keep lowercase 'default' for backwards compatibility (some code may reference it).
+#  default:
+#    driver: sqlite3
+#    url: "file::memory:?cache=shared"
 
 # -----------------------------------------------------------------------------
 # MySQL example (commented)

@@ -73,7 +73,7 @@ func TestGetDS_DefaultDS_Close(t *testing.T) {
 	wrapped := stdDB{DB: raw}
 
 	dsMu.Lock()
-	dsRegistry[defaultDSName] = wrapped
+	dsRegistry[defaultDs] = wrapped
 	dsRegistry["Other"] = wrapped
 	defaultDS = wrapped
 	dsMu.Unlock()
