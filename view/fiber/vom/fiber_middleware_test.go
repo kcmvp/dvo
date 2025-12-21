@@ -13,27 +13,27 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/adaptor"
-	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/constraint"
+	"github.com/kcmvp/dvo/validator"
+	"github.com/kcmvp/dvo/view"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 // 1. Define the dynamic view object using the dvo API with validation rules.
-var orderVO = dvo.WithFields(
-	dvo.Field[string]("OrderID"),                            // From JSON body
-	dvo.Field[string]("CustomerID"),                         // From JSON body
-	dvo.Field[time.Time]("OrderDate"),                       // From JSON body
-	dvo.Field[float64]("Amount", constraint.Gt[float64](0)), // From JSON body
-	dvo.Field[int]("Priority").Optional(),                   // From JSON body
-	dvo.Field[bool]("Shipped"),                              // From JSON body
-	dvo.Field[string]("ordId").Optional(),                   // From path parameter
-	dvo.Field[string]("source").Optional(),                  // From query parameter
-	dvo.Field[int]("limit").Optional(),                      // From query parameter
-	dvo.Field[time.Time]("registered_date").Optional(),      // From query parameter
-	dvo.Field[bool]("received").Optional(),                  // From query parameter
-	dvo.Field[float64]("minim_price").Optional(),            // From query parameter
+var orderVO = view.WithFields(
+	view.Field[string]("OrderID"),                           // From JSON body
+	view.Field[string]("CustomerID"),                        // From JSON body
+	view.Field[time.Time]("OrderDate"),                      // From JSON body
+	view.Field[float64]("Amount", validator.Gt[float64](0)), // From JSON body
+	view.Field[int]("Priority").Optional(),                  // From JSON body
+	view.Field[bool]("Shipped"),                             // From JSON body
+	view.Field[string]("ordId").Optional(),                  // From path parameter
+	view.Field[string]("source").Optional(),                 // From query parameter
+	view.Field[int]("limit").Optional(),                     // From query parameter
+	view.Field[time.Time]("registered_date").Optional(),     // From query parameter
+	view.Field[bool]("received").Optional(),                 // From query parameter
+	view.Field[float64]("minim_price").Optional(),           // From query parameter
 )
 
 type MiddlewareTestSuite struct {
@@ -211,9 +211,9 @@ func (suite *MiddlewareTestSuite) TestBindingWithParamsAndEnricher() {
 // which can cause routing issues when using the net/http adaptor.
 func TestPanicOnDuplicateQueryParam(t *testing.T) {
 	// 1. Define the ViewObject needed for this test
-	vo := dvo.WithFields(
-		dvo.Field[string]("ordId"),
-		dvo.Field[string]("source"),
+	vo := view.WithFields(
+		view.Field[string]("ordId"),
+		view.Field[string]("source"),
 	)
 
 	// 2. Create a new, isolated Fiber app and register the route

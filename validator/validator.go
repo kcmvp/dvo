@@ -1,4 +1,4 @@
-package constraint
+package validator
 
 import (
 	"errors"

@@ -28,6 +28,7 @@ type Account struct {
 	Dummy    Dummy
 	Email    string `xql:"unique;index"`
 	Nickname string `xql:"name:nick_name;type:varchar(100);unique;not null;default:'anonymous'"`
+	Category int64  `xql:"type:integer;default:0"`
 	Balance  float64
 }
 

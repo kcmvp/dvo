@@ -1,4 +1,4 @@
-package dvo
+package view
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kcmvp/dvo/constraint"
+	"github.com/kcmvp/dvo/validator"
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -81,7 +81,7 @@ func TestTypedString(t *testing.T) {
 			name:        "int8_overflow",
 			input:       "128",
 			targetType:  int8(0),
-			expectedErr: constraint.ErrIntegerOverflow,
+			expectedErr: validator.ErrIntegerOverflow,
 		},
 		{
 			name:                "int_invalid_format",
@@ -112,7 +112,7 @@ func TestTypedString(t *testing.T) {
 			name:        "uint8_overflow",
 			input:       "256",
 			targetType:  uint8(0),
-			expectedErr: constraint.ErrIntegerOverflow,
+			expectedErr: validator.ErrIntegerOverflow,
 		},
 		{
 			name:                "uint_negative_fail",
@@ -217,27 +217,27 @@ func TestJSONField_validateRaw(t *testing.T) {
 	}{
 		{
 			name:      "string_success_with_validator",
-			field:     Field[string]("name", constraint.MinLength(3)),
+			field:     Field[string]("name", validator.MinLength(3)),
 			input:     "gopher",
 			wantValue: "gopher",
 		},
 		{
 			name:    "string_validation_fail",
-			field:   Field[string]("name", constraint.MinLength(10)),
+			field:   Field[string]("name", validator.MinLength(10)),
 			input:   "gopher",
-			wantErr: constraint.ErrLengthMin,
+			wantErr: validator.ErrLengthMin,
 		},
 		{
 			name:      "int_success_with_validator",
-			field:     Field[int]("age", constraint.Gt(18)),
+			field:     Field[int]("age", validator.Gt(18)),
 			input:     "20",
 			wantValue: 20,
 		},
 		{
 			name:    "int_validation_fail",
-			field:   Field[int]("age", constraint.Gt(18)),
+			field:   Field[int]("age", validator.Gt(18)),
 			input:   "18",
-			wantErr: constraint.ErrMustGt,
+			wantErr: validator.ErrMustGt,
 		},
 		{
 			name:                "int_parsing_fail",
@@ -315,13 +315,13 @@ func TestTyped(t *testing.T) {
 				name:        "int_from_string_fail",
 				json:        `{"value": "123"}`,
 				targetType:  int(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "int_overflow",
 				json:        fmt.Sprintf(`{"value": %d1}`, math.MaxInt), // Overflow
 				targetType:  int(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "int8_ok",
@@ -333,7 +333,7 @@ func TestTyped(t *testing.T) {
 				name:        "int8_overflow",
 				json:        `{"value": 128}`,
 				targetType:  int8(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "int16_ok",
@@ -345,7 +345,7 @@ func TestTyped(t *testing.T) {
 				name:        "int16_overflow",
 				json:        `{"value": 32768}`,
 				targetType:  int16(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "int32_ok",
@@ -357,7 +357,7 @@ func TestTyped(t *testing.T) {
 				name:        "int32_overflow",
 				json:        `{"value": 2147483648}`,
 				targetType:  int32(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "int64_ok",
@@ -369,31 +369,31 @@ func TestTyped(t *testing.T) {
 				name:        "int64_overflow",
 				json:        `{"value": 9223372036854775808}`,
 				targetType:  int64(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:        "int64_underflow",
 				json:        `{"value": -9223372036854775809}`,
 				targetType:  int64(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:        "int_from_float_fail",
 				json:        `{"value": 123.45}`,
 				targetType:  int(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "int_from_bool_fail",
 				json:        `{"value": true}`,
 				targetType:  int(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "int_from_malformed_float_fail",
 				json:        `{"value": 1.2.3}`, // gjson is lenient and parses this as a number
 				targetType:  int(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 		}
 
@@ -447,13 +447,13 @@ func TestTyped(t *testing.T) {
 				name:        "uint_from_string_fail",
 				json:        `{"value": "123"}`,
 				targetType:  uint(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "uint_negative_fail",
 				json:        `{"value": -1}`,
 				targetType:  uint(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "uint8_ok",
@@ -465,7 +465,7 @@ func TestTyped(t *testing.T) {
 				name:        "uint8_overflow",
 				json:        `{"value": 256}`,
 				targetType:  uint8(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "uint16_ok",
@@ -477,7 +477,7 @@ func TestTyped(t *testing.T) {
 				name:        "uint16_overflow",
 				json:        `{"value": 65536}`,
 				targetType:  uint16(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "uint32_ok",
@@ -489,7 +489,7 @@ func TestTyped(t *testing.T) {
 				name:        "uint32_overflow",
 				json:        `{"value": 4294967296}`,
 				targetType:  uint32(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:       "uint64_ok",
@@ -501,31 +501,31 @@ func TestTyped(t *testing.T) {
 				name:        "uint64_overflow",
 				json:        fmt.Sprintf(`{"value":%s}`, "18446744073709551616"), // MaxUint64 + 1
 				targetType:  uint64(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:        "uint64_overflow_from_large_number",
 				json:        `{"value": 18446744073709551616}`,
 				targetType:  uint64(0),
-				expectedErr: constraint.ErrIntegerOverflow,
+				expectedErr: validator.ErrIntegerOverflow,
 			},
 			{
 				name:        "uint_from_float_fail",
 				json:        `{"value": 123.45}`,
 				targetType:  uint(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "uint_from_bool_fail",
 				json:        `{"value": true}`,
 				targetType:  uint(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "uint_from_malformed_float_fail",
 				json:        `{"value": 1.2.3}`, // gjson is lenient and parses this as a number
 				targetType:  uint(0),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 		}
 
@@ -664,13 +664,13 @@ func TestTyped(t *testing.T) {
 				name:        "bool_from_string_fail",
 				json:        `{"value": "true"}`,
 				targetType:  bool(false),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 			{
 				name:        "bool_from_number_fail",
 				json:        `{"value": 1}`,
 				targetType:  bool(false),
-				expectedErr: constraint.ErrTypeMismatch,
+				expectedErr: validator.ErrTypeMismatch,
 			},
 		}
 
@@ -908,10 +908,10 @@ func TestSchemaField_validate(t *testing.T) {
 		},
 		{
 			name:      "required_field_present_but_invalid",
-			field:     Field[string]("name", constraint.MinLength(10)),
+			field:     Field[string]("name", validator.MinLength(10)),
 			json:      `{"name": "gopher"}`,
 			wantValue: nil,
-			wantErr:   constraint.ErrLengthMin,
+			wantErr:   validator.ErrLengthMin,
 		},
 		{
 			name:      "optional_field_present_and_valid",
@@ -922,17 +922,17 @@ func TestSchemaField_validate(t *testing.T) {
 		},
 		{
 			name:      "optional_field_present_but_invalid",
-			field:     Field[string]("name", constraint.MinLength(10)).Optional(),
+			field:     Field[string]("name", validator.MinLength(10)).Optional(),
 			json:      `{"name": "gopher"}`,
 			wantValue: nil,
-			wantErr:   constraint.ErrLengthMin,
+			wantErr:   validator.ErrLengthMin,
 		},
 		{
 			name:      "type_mismatch",
 			field:     Field[int]("age"),
 			json:      `{"age": "not-an-age"}`,
 			wantValue: nil,
-			wantErr:   constraint.ErrTypeMismatch,
+			wantErr:   validator.ErrTypeMismatch,
 		},
 	}
 
@@ -1094,31 +1094,31 @@ func TestSchema_AllowUnknownFields(t *testing.T) {
 func TestEndToEnd(t *testing.T) {
 	// Define the Schema with various field types and constraints
 	userSchema := WithFields(
-		Field[string]("name", constraint.MinLength(3)),
-		Field[int]("age", constraint.Between(18, 120)),
-		Field[string]("email", constraint.Email()).Optional(),
+		Field[string]("name", validator.MinLength(3)),
+		Field[int]("age", validator.Between(18, 120)),
+		Field[string]("email", validator.Email()).Optional(),
 		Field[bool]("isActive"),
 		Field[time.Time]("createdAt").Optional(),
-		Field[float64]("rating", constraint.Between(0.0, 5.0)),
+		Field[float64]("rating", validator.Between(0.0, 5.0)),
 		Field[string]("department").Optional(),
-		Field[string]("username", constraint.CharSetOnly(constraint.LowerCaseChar)),
+		Field[string]("username", validator.CharSetOnly(validator.LowerCaseChar)),
 		Field[string]("nickname"), // No validator for 'not contains substring' yet
-		Field[string]("countryCode", constraint.ExactLength(2)),
-		Field[string]("homepage", constraint.URL()).Optional(),
-		Field[string]("status", constraint.OneOf[string]("active", "inactive", "pending")),
-		Field[string]("tags", constraint.Match(`tag_*`)),
-		Field[float64]("salary", constraint.Gt(0.0)),
+		Field[string]("countryCode", validator.ExactLength(2)),
+		Field[string]("homepage", validator.URL()).Optional(),
+		Field[string]("status", validator.OneOf[string]("active", "inactive", "pending")),
+		Field[string]("tags", validator.Match(`tag_*`)),
+		Field[float64]("salary", validator.Gt(0.0)),
 		// New fields for all raw types
-		Field[int8]("level", constraint.Between[int8](1, 100)),
-		Field[int16]("score", constraint.Gt[int16](0)),
-		Field[int32]("views", constraint.Gte[int32](0)),
-		Field[int64]("balance", constraint.Gte[int64](0)),
+		Field[int8]("level", validator.Between[int8](1, 100)),
+		Field[int16]("score", validator.Gt[int16](0)),
+		Field[int32]("views", validator.Gte[int32](0)),
+		Field[int64]("balance", validator.Gte[int64](0)),
 		Field[uint]("flags"),
 		Field[uint8]("version"),
 		Field[uint16]("build"),
 		Field[uint32]("instanceId"),
 		Field[uint64]("nonce"),
-		Field[float32]("ratio", constraint.Between[float32](0.0, 1.0)),
+		Field[float32]("ratio", validator.Between[float32](0.0, 1.0)),
 	)
 
 	// Test cases
@@ -1128,7 +1128,7 @@ func TestEndToEnd(t *testing.T) {
 		check   func(t *testing.T, vo ValueObject)
 	}{
 		{
-			name:    "valid user",
+			name    "valid user",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
 				// Clause
@@ -1210,15 +1210,15 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 		{
-			name:    "invalid rating",
+			name    "invalid rating",
 			isValid: false,
 		},
 		{
-			name:    "missing required field",
+			name    "missing required field",
 			isValid: false,
 		},
 		{
-			name:    "valid user with all optional fields",
+			name    "valid user with all optional fields",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
 				// Check optional fields that are present
@@ -1278,7 +1278,7 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 		{
-			name:    "valid user without optional email",
+			name    "valid user without optional email",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
 				_, ok := vo.String("email").Get()
@@ -1297,27 +1297,27 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 		{
-			name:    "invalid username charset",
+			name    "invalid username charset",
 			isValid: false,
 		},
 		{
-			name:    "invalid countryCode length",
+			name    "invalid countryCode length",
 			isValid: false,
 		},
 		{
-			name:    "invalid tags pattern",
+			name    "invalid tags pattern",
 			isValid: false,
 		},
 		{
-			name:    "invalid homepage url",
+			name    "invalid homepage url",
 			isValid: false,
 		},
 		{
-			name:    "invalid status",
+			name    "invalid status",
 			isValid: false,
 		},
 		{
-			name:    "invalid salary",
+			name    "invalid salary",
 			isValid: false,
 		},
 	}
@@ -1460,25 +1460,25 @@ func TestField_PanicOnInvalidName(t *testing.T) {
 func TestField_PanicOnDuplicateValidator(t *testing.T) {
 	t.Run("duplicate validator", func(t *testing.T) {
 		require.PanicsWithValue(t, "dvo: duplicate validator 'min_length' for field 'password'", func() {
-			Field[string]("password", constraint.MinLength(5), constraint.MinLength(10))
+			Field[string]("password", validator.MinLength(5), validator.MinLength(10))
 		})
 	})
 }
 
 func TestNestedValidation(t *testing.T) {
 	userSchema := WithFields(
-		Field[string]("name", constraint.MinLength(1)),
-		Field[string]("email", constraint.Email()),
+		Field[string]("name", validator.MinLength(1)),
+		Field[string]("email", validator.Email()),
 	)
 
 	supplierSchema := WithFields(
 		Field[string]("id"),
-		Field[string]("name", constraint.MinLength(1)),
+		Field[string]("name", validator.MinLength(1)),
 	)
 
 	itemSchema := WithFields(
-		Field[int]("id", constraint.Gt(0)),
-		Field[string]("name", constraint.MinLength(1)),
+		Field[int]("id", validator.Gt(0)),
+		Field[string]("name", validator.MinLength(1)),
 		// Add supplier as an optional 3rd level object to not break existing tests
 		ObjectField("supplier", supplierSchema).Optional(),
 	)
@@ -1486,7 +1486,7 @@ func TestNestedValidation(t *testing.T) {
 	requestSchema := WithFields(
 		Field[string]("id"),
 		ObjectField("user", userSchema),
-		ArrayField[string]("tags", constraint.MinLength(2)),
+		ArrayField[string]("tags", validator.MinLength(2)),
 		ArrayOfObjectField("items", itemSchema),
 		ArrayField[string]("string_array").Optional(),
 		ArrayField[int]("int_array").Optional(),

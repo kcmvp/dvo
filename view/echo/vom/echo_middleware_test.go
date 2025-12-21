@@ -10,27 +10,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/constraint"
+	"github.com/kcmvp/dvo/validator"
+	"github.com/kcmvp/dvo/view"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-var orderVO = dvo.WithFields(
-	dvo.Field[string]("OrderID"),                            // From JSON body
-	dvo.Field[string]("CustomerID"),                         // From JSON body
-	dvo.Field[time.Time]("OrderDate"),                       // From JSON body
-	dvo.Field[float64]("Amount", constraint.Gt[float64](0)), // From JSON body
-	dvo.Field[int]("Priority").Optional(),                   // From JSON body
-	dvo.Field[bool]("Shipped"),                              // From JSON body
-	dvo.Field[string]("ordId").Optional(),                   // From path parameter
-	dvo.Field[string]("source").Optional(),                  // From query parameter
-	dvo.Field[int]("limit").Optional(),                      // From query parameter
-	dvo.Field[time.Time]("registered_date").Optional(),      // From query parameter
-	dvo.Field[bool]("received").Optional(),                  // From query parameter
-	dvo.Field[float64]("minim_price").Optional(),            // From query parameter
+var orderVO = view.WithFields(
+	view.Field[string]("OrderID"),                           // From JSON body
+	view.Field[string]("CustomerID"),                        // From JSON body
+	view.Field[time.Time]("OrderDate"),                      // From JSON body
+	view.Field[float64]("Amount", validator.Gt[float64](0)), // From JSON body
+	view.Field[int]("Priority").Optional(),                  // From JSON body
+	view.Field[bool]("Shipped"),                             // From JSON body
+	view.Field[string]("ordId").Optional(),                  // From path parameter
+	view.Field[string]("source").Optional(),                 // From query parameter
+	view.Field[int]("limit").Optional(),                     // From query parameter
+	view.Field[time.Time]("registered_date").Optional(),     // From query parameter
+	view.Field[bool]("received").Optional(),                 // From query parameter
+	view.Field[float64]("minim_price").Optional(),           // From query parameter
 )
 
 type MiddlewareTestSuite struct {

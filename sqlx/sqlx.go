@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"reflect"
+	"regexp"
 	"strings"
 
-	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/entity"
+	"github.com/kcmvp/dvo/view"
 	"github.com/samber/lo"
 )
 
@@ -73,7 +76,7 @@ func In[E entity.Entity](field entity.FieldProvider[E], values ...any) Where[E] 
 // The zero-length array `_ [0]T` is a common Go idiom to associate a generic type
 // with a struct without incurring any memory overhead for a stored field.
 type Schema[T entity.Entity] struct {
-	*dvo.Schema
+	*view.Schema
 	providers []entity.FieldProvider[T]
 	_         [0]T
 }
@@ -82,7 +85,7 @@ type Schema[T entity.Entity] struct {
 // It uses the zero-length array idiom to associate the entity type T at compile time
 // without any memory cost, making it a lightweight, type-safe handle.
 type ValueObject[T entity.Entity] struct {
-	dvo.ValueObject
+	view.ValueObject
 	_ [0]T
 }
 
@@ -92,13 +95,13 @@ type ValueObject[T entity.Entity] struct {
 func NewSchema[T entity.Entity](providers ...entity.FieldProvider[T]) *Schema[T] {
 	// We need to convert the slice of entity.FieldProvider[T] back to []dvo.FieldProvider
 	// for the universal WithFields function.
-	dvoProviders := make([]dvo.FieldProvider, len(providers))
+	dvoProviders := make([]view.FieldProvider, len(providers))
 	for i, p := range providers {
 		dvoProviders[i] = p
 	}
 
 	// 1. Create the universal Schema first using the core library function.
-	universalSchema := dvo.WithFields(dvoProviders...)
+	universalSchema := view.WithFields(dvoProviders...)
 
 	// 2. Wrap it in our generic Schema.
 	return &Schema[T]{
@@ -110,7 +113,6 @@ func NewSchema[T entity.Entity](providers ...entity.FieldProvider[T]) *Schema[T]
 // Query is a generic function that queries the database and returns a slice of T.
 // It uses the provided schema to build the SELECT clause and the Where interface to build the WHERE clause.
 func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[T]) ([]ValueObject[T], error) {
-	// We'll build SQL here because we need to resolve actual DB column names at runtime
 	if schema == nil || schema.Schema == nil {
 		return nil, fmt.Errorf("schema is required")
 	}
@@ -123,61 +125,64 @@ func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[
 		return nil, fmt.Errorf("default datasource is not initialized")
 	}
 
-	// 1. get table columns from DB (SQLite PRAGMA)
-	colsInDB := map[string]struct{}{}
-	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info('%s')", table))
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var cid int
-		var name string
-		var ctype any
-		var notnull any
-		var dflt any
-		var pk any
-		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
-			return nil, err
+	// Helper to find `name:...` in `xql` tag for a given field name on the entity type.
+	findXQLName := func(fieldName string) (string, bool) {
+		rt := reflect.TypeOf(ent)
+		if rt == nil {
+			return "", false
 		}
-		colsInDB[name] = struct{}{}
+		if rt.Kind() == reflect.Ptr {
+			rt = rt.Elem()
+		}
+		var walk func(reflect.Type) (string, bool)
+		walk = func(t reflect.Type) (string, bool) {
+			if t.Kind() != reflect.Struct {
+				return "", false
+			}
+			for i := 0; i < t.NumField(); i++ {
+				f := t.Field(i)
+				if f.Name == fieldName {
+					tag := f.Tag.Get("xql")
+					if tag != "" {
+						parts := strings.Split(tag, ";")
+						for _, p := range parts {
+							p = strings.TrimSpace(p)
+							if strings.HasPrefix(p, "name:") {
+								return strings.TrimPrefix(p, "name:"), true
+							}
+						}
+					}
+					return "", false
+				}
+				if f.Anonymous {
+					ft := f.Type
+					if ft.Kind() == reflect.Ptr {
+						ft = ft.Elem()
+					}
+					if name, ok := walk(ft); ok {
+						return name, true
+					}
+				}
+			}
+			return "", false
+		}
+		return walk(rt)
 	}
 
-	// DEBUG: show cols in DB
-	fmt.Println("[sqlx] colsInDB:")
-	for c := range colsInDB {
-		fmt.Println("  -", c)
-	}
-
-	// 2. map schema field names to actual DB columns using normalized matching
+	// Map schema field names to DB columns: prefer `xql:"name:..."` tag when present, else snake_case
 	fieldNames := make([]string, 0, len(schema.providers))
-	fieldToDB := map[string]string{} // key: table.FieldName -> table.db_col
+	fieldToDB := map[string]string{}
 	for _, p := range schema.providers {
 		col := p.AsSchemaField().Name()
 		fieldNames = append(fieldNames, col)
-		// find matching DB column by normalization
-		var matched string
-		normField := strings.ToLower(strings.ReplaceAll(col, "_", ""))
-		for dbcol := range colsInDB {
-			if strings.ToLower(strings.ReplaceAll(dbcol, "_", "")) == normField {
-				matched = dbcol
-				break
-			}
+		if tagName, ok := findXQLName(col); ok && tagName != "" {
+			fieldToDB[fmt.Sprintf("%s.%s", table, col)] = fmt.Sprintf("%s.%s", table, tagName)
+		} else {
+			fieldToDB[fmt.Sprintf("%s.%s", table, col)] = fmt.Sprintf("%s.%s", table, lo.SnakeCase(col))
 		}
-		if matched == "" {
-			// fallback to snake_case(col)
-			matched = lo.SnakeCase(col)
-		}
-		fieldToDB[fmt.Sprintf("%s.%s", table, col)] = fmt.Sprintf("%s.%s", table, matched)
 	}
 
-	// DEBUG: show mapping
-	fmt.Println("[sqlx] fieldToDB mapping:")
-	for k, v := range fieldToDB {
-		fmt.Println("  ", k, "=>", v)
-	}
-
-	// 3. build SELECT clause using mapped DB column names and aliases
+	// build SELECT clause using mapped DB column names and aliases
 	cols := make([]string, 0, len(schema.providers))
 	for _, col := range fieldNames {
 		dbQualified := fieldToDB[fmt.Sprintf("%s.%s", table, col)]
@@ -189,14 +194,10 @@ func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[
 
 	sql := fmt.Sprintf("SELECT %s FROM %s", strings.Join(cols, ", "), table)
 
-	// DEBUG: print generated SQL for diagnostics
-	fmt.Println("[sqlx] SQL =>", sql)
-
 	var args []any
 	if where != nil {
 		clause, a := where.Build()
 		if clause != "" {
-			// rewrite clause to map schema-qualified names to DB-qualified names
 			for k, v := range fieldToDB {
 				clause = strings.ReplaceAll(clause, k, v)
 			}
@@ -241,6 +242,166 @@ func Query[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[
 		return nil, err
 	}
 
+	return out, nil
+}
+
+// convertQualifiedFieldsToDB helper to convert qualified CamelCase field names like `accounts.AccountID`
+// to DB snake_case `accounts.account_id` before executing join SQL in QueryJoin; uses regexp and lo.SnakeCase.
+func convertQualifiedFieldsToDB(sqlStr string) string {
+	// Replace occurrences of <table>.<Field> with <table>.<snake_case(field)>
+	re := regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b`)
+	return re.ReplaceAllStringFunc(sqlStr, func(m string) string {
+		sm := re.FindStringSubmatch(m)
+		if len(sm) < 3 {
+			return m
+		}
+		table := sm[1]
+		field := sm[2]
+		return fmt.Sprintf("%s.%s", table, lo.SnakeCase(field))
+	})
+}
+
+// QueryJoin executes a join SELECT and returns typed base-entity results ([]ValueObject[T]).
+// - schema: the base entity schema (defines the projection and validation)
+// - joins: list of JoinClause produced by Join/LeftJoin
+// - where: a Where[entity.Entity] that may reference joined tables using qualified names
+// Notes:
+// - Projection is derived from `schema.providers` (only base table columns will be selected and validated).
+// - This implementation does not collect bind-parameters embedded in JOIN ON clauses; ON should contain only column predicates.
+func QueryJoin[T entity.Entity](ctx context.Context, schema *Schema[T], joins []JoinClause, where Where[entity.Entity]) ([]ValueObject[T], error) {
+	if schema == nil || schema.Schema == nil {
+		return nil, fmt.Errorf("schema is required")
+	}
+
+	var ent T
+	baseTable := ent.Table()
+
+	db, ok := DefaultDS()
+	if !ok || db == nil {
+		return nil, fmt.Errorf("default datasource is not initialized")
+	}
+
+	// Enforce two-table-only when explicitly requested via env var
+	if os.Getenv("SQLX_ENFORCE_TWO_TABLE_JOIN") == "1" {
+		targets := extractJoinTargetTables(joins)
+		if len(targets) > 1 {
+			return nil, fmt.Errorf("sqlx: only two-table joins are supported (detected targets: %v)", targets)
+		}
+	}
+
+	// Build projection from schema.providers (these implement entity.JoinFieldProvider)
+	projection := make([]entity.JoinFieldProvider, len(schema.providers))
+	for i, p := range schema.providers {
+		projection[i] = p
+	}
+
+	// Build SQL using the join SQL builder. Projection is the base table fields only.
+	sqlStr, args, err := selectJoinSQL(baseTable, projection, joins, where)
+	if err != nil {
+		return nil, err
+	}
+
+	// Helper to find `name:...` in `xql` tag for a given field name on the entity type.
+	findXQLName := func(fieldName string) (string, bool) {
+		rt := reflect.TypeOf(ent)
+		if rt == nil {
+			return "", false
+		}
+		if rt.Kind() == reflect.Ptr {
+			rt = rt.Elem()
+		}
+		var walk func(reflect.Type) (string, bool)
+		walk = func(t reflect.Type) (string, bool) {
+			if t.Kind() != reflect.Struct {
+				return "", false
+			}
+			for i := 0; i < t.NumField(); i++ {
+				f := t.Field(i)
+				if f.Name == fieldName {
+					tag := f.Tag.Get("xql")
+					if tag != "" {
+						parts := strings.Split(tag, ";")
+						for _, p := range parts {
+							p = strings.TrimSpace(p)
+							if strings.HasPrefix(p, "name:") {
+								return strings.TrimPrefix(p, "name:"), true
+							}
+						}
+					}
+					return "", false
+				}
+				if f.Anonymous {
+					ft := f.Type
+					if ft.Kind() == reflect.Ptr {
+						ft = ft.Elem()
+					}
+					if name, ok := walk(ft); ok {
+						return name, true
+					}
+				}
+			}
+			return "", false
+		}
+		return walk(rt)
+	}
+
+	// Map schema field names to DB columns for base table: prefer xql tag name then snake_case
+	fieldNames := make([]string, 0, len(schema.providers))
+	fieldToDB := map[string]string{}
+	for _, p := range schema.providers {
+		col := p.AsSchemaField().Name()
+		fieldNames = append(fieldNames, col)
+		if tagName, ok := findXQLName(col); ok && tagName != "" {
+			fieldToDB[fmt.Sprintf("%s.%s", baseTable, col)] = fmt.Sprintf("%s.%s", baseTable, tagName)
+		} else {
+			fieldToDB[fmt.Sprintf("%s.%s", baseTable, col)] = fmt.Sprintf("%s.%s", baseTable, lo.SnakeCase(col))
+		}
+	}
+
+	// Replace base-qualified tokens (table.Field) with DB-qualified tokens (table.db_col)
+	for k, v := range fieldToDB {
+		sqlStr = strings.ReplaceAll(sqlStr, k, v)
+	}
+
+	// Convert any remaining qualified CamelCase tokens for other tables -> snake_case
+	sqlStr = convertQualifiedFieldsToDB(sqlStr)
+
+	// Execute
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]ValueObject[T], 0)
+	for rows.Next() {
+		vals := make([]any, len(fieldNames))
+		ptrs := make([]any, len(fieldNames))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+
+		m := make(map[string]any, len(fieldNames))
+		for i, name := range fieldNames {
+			m[name] = dbValueToJSON(vals[i])
+		}
+
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
+		res := schema.Schema.Validate(string(b))
+		if res.IsError() {
+			return nil, res.Error()
+		}
+		out = append(out, ValueObject[T]{ValueObject: res.MustGet()})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -398,4 +559,99 @@ func dbValueToJSON(v any) any {
 	default:
 		return t
 	}
+}
+
+// Count returns the number of rows matching the provided where condition for entity T.
+// If schema is nil, do not require schema: rewrite qualified provider tokens
+// <table>.<Field> by converting Field -> snake_case(Field) and execute COUNT(*).
+func Count[T entity.Entity](ctx context.Context, schema *Schema[T], where Where[T]) (int64, error) {
+	// Accept nil schema: only reject if non-nil but invalid
+	if schema != nil && schema.Schema == nil {
+		return 0, fmt.Errorf("invalid schema")
+	}
+	var ent T
+	table := ent.Table()
+	db, ok := DefaultDS()
+	if !ok || db == nil {
+		return 0, fmt.Errorf("default datasource is not initialized")
+	}
+
+	// Build field->db mapping deterministically if schema provided.
+	var fieldToDB map[string]string
+	if schema != nil {
+		fieldToDB = map[string]string{}
+		for _, p := range schema.providers {
+			col := p.AsSchemaField().Name()
+			dbCol := lo.SnakeCase(col)
+			fieldToDB[fmt.Sprintf("%s.%s", table, col)] = fmt.Sprintf("%s.%s", table, dbCol)
+		}
+	}
+
+	// build SQL
+	sqlStr := fmt.Sprintf("SELECT COUNT(1) FROM %s", table)
+	var args []any
+	if where != nil {
+		clause, a := where.Build()
+		if clause != "" {
+			if fieldToDB != nil {
+				for k, v := range fieldToDB {
+					clause = strings.ReplaceAll(clause, k, v)
+				}
+			} else {
+				// rewrite occurrences of `<table>.<Field>` -> `<table>.<snake_case(Field)>` using regex
+				re := regexp.MustCompile(`\b` + regexp.QuoteMeta(table) + `\.([A-Za-z_][A-ZaZ0-9_]*)\b`)
+				clause = re.ReplaceAllStringFunc(clause, func(m string) string {
+					sm := re.FindStringSubmatch(m)
+					if len(sm) >= 2 {
+						field := sm[1]
+						return fmt.Sprintf("%s.%s", table, lo.SnakeCase(field))
+					}
+					return m
+				})
+			}
+			sqlStr += " WHERE " + clause
+			args = a
+		}
+	}
+
+	// execute with QueryRow for COUNT
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	var cnt sql.NullInt64
+	if rows.Next() {
+		if err := rows.Scan(&cnt); err != nil {
+			return 0, err
+		}
+		if cnt.Valid {
+			return cnt.Int64, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return 0, nil
+}
+
+func extractJoinTargetTables(joins []JoinClause) []string {
+	set := map[string]struct{}{}
+	re := regexp.MustCompile(`(?i)\b(INNER JOIN|LEFT JOIN|RIGHT JOIN|FULL JOIN)\s+([A-Za-z0-9_]+)`)
+	for _, j := range joins {
+		if j == nil {
+			continue
+		}
+		c := j.Clause()
+		matches := re.FindStringSubmatch(c)
+		if len(matches) >= 3 {
+			table := matches[2]
+			set[table] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	return out
 }

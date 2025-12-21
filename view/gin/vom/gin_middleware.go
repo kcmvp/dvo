@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
+	"github.com/kcmvp/dvo/view"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 )
@@ -44,7 +44,7 @@ func urlParams(ctx *gin.Context) map[string]string {
 // If validation is successful, the validated data is stored in the request context.
 // If validation fails, it aborts the request with a 400 Bad Request status and an error message.
 // It also allows for enriching the validated data using a previously set EnrichFunc function.
-func Bind(schema *dvo.Schema) gin.HandlerFunc {
+func Bind(schema *view.Schema) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Get a fresh ValueObject instance for this request.
 		bts := mo.TupleToResult[[]byte](io.ReadAll(ctx.Request.Body))
@@ -75,9 +75,9 @@ func Bind(schema *dvo.Schema) gin.HandlerFunc {
 
 // ValueObject retrieves the validated ValueObject from the gin context.
 // It returns nil if the object is not found.
-func ValueObject(c *gin.Context) dvo.ValueObject {
+func ValueObject(c *gin.Context) view.ValueObject {
 	if val := c.Request.Context().Value(internal.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.ValueObject); ok {
+		if vo, ok := val.(view.ValueObject); ok {
 			return vo
 		}
 	}

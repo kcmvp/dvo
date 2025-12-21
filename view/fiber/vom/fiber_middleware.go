@@ -4,8 +4,8 @@ import (
 	"sync"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
+	"github.com/kcmvp/dvo/view"
 	"github.com/samber/lo"
 )
 
@@ -48,7 +48,7 @@ func urlParams(ctx fiber.Ctx) map[string]string {
 
 // Bind creates a new fiber middleware to bind and validate the schema.
 // It takes a provider function that returns a new Schema for each request.
-func Bind(schema *dvo.Schema) fiber.Handler {
+func Bind(schema *view.Schema) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Get a fresh Schema instance for this request.
 		body := string(c.Body())
@@ -72,9 +72,9 @@ func Bind(schema *dvo.Schema) fiber.Handler {
 
 // ValueObject retrieves the validated dvo.ValueObject from the fiber context.
 // It returns nil if the object is not found.
-func ValueObject(c fiber.Ctx) dvo.ValueObject {
+func ValueObject(c fiber.Ctx) view.ValueObject {
 	if val := c.Locals(internal.ViewObjectKey); val != nil {
-		if vo, ok := val.(dvo.ValueObject); ok {
+		if vo, ok := val.(view.ValueObject); ok {
 			return vo
 		}
 	}

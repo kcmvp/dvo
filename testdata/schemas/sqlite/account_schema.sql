@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY,
     email TEXT UNIQUE,
     nick_name varchar(100) NOT NULL UNIQUE DEFAULT 'anonymous',
+    category integer DEFAULT 0,
     balance REAL,
     created_at DATETIME,
     updated_at DATETIME,

@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	cfgName     = "application.yaml"
-	cfgTestName = "application_test.yaml"
+	cfgName     = "application"
+	testCfgName = "application_test"
 )
 
 var (
@@ -41,7 +41,7 @@ func Config() mo.Result[*viper.Viper] {
 
 func loadViper(required bool) (*viper.Viper, error) {
 	v := viper.New()
-	//v.SetConfigType("yaml")
+	v.SetConfigType("yaml")
 
 	// Search paths:
 	// 1) project root (detected by walking up to find go.mod) and its ./config
@@ -55,40 +55,40 @@ func loadViper(required bool) (*viper.Viper, error) {
 	name := cfgName
 	// If application_test.yaml exists in project root or CWD, prefer it (helps test runs).
 	cwd, _ := os.Getwd()
-	if root, ok := findProjectRoot(cwd); ok {
-		cand := filepath.Join(root, cfgTestName)
+
+	// helper to reduce duplicated stat/read pattern
+	tryRead := func(cand string) bool {
 		if _, err := os.Stat(cand); err == nil {
 			v.SetConfigFile(cand)
 			if err := v.ReadInConfig(); err == nil {
-				return v, nil
+				return true
 			}
 		}
-		cand = filepath.Join(root, "config", cfgTestName)
-		if _, err := os.Stat(cand); err == nil {
-			v.SetConfigFile(cand)
-			if err := v.ReadInConfig(); err == nil {
-				return v, nil
-			}
+		return false
+	}
+
+	if root, ok := findProjectRoot(cwd); ok {
+		cand := filepath.Join(root, testCfgName)
+		if tryRead(cand) {
+			return v, nil
+		}
+		cand = filepath.Join(root, "config", testCfgName)
+		if tryRead(cand) {
+			return v, nil
 		}
 	}
 	// Also check CWD
-	cand := filepath.Join(cwd, cfgTestName)
-	if _, err := os.Stat(cand); err == nil {
-		v.SetConfigFile(cand)
-		if err := v.ReadInConfig(); err == nil {
-			return v, nil
-		}
+	cand := filepath.Join(cwd, testCfgName)
+	if tryRead(cand) {
+		return v, nil
 	}
-	cand = filepath.Join(cwd, "config", cfgTestName)
-	if _, err := os.Stat(cand); err == nil {
-		v.SetConfigFile(cand)
-		if err := v.ReadInConfig(); err == nil {
-			return v, nil
-		}
+	cand = filepath.Join(cwd, "config", testCfgName)
+	if tryRead(cand) {
+		return v, nil
 	}
 
 	if isTestProcess() {
-		name = cfgTestName
+		name = testCfgName
 	}
 	v.SetConfigName(strings.TrimSuffix(name, filepath.Ext(name)))
 

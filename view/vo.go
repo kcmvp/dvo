@@ -1,4 +1,4 @@
-package dvo
+package view
 
 import (
 	"errors"
@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kcmvp/dvo/constraint"
+	"github.com/kcmvp/dvo/meta"
+	"github.com/kcmvp/dvo/validator"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"
@@ -74,13 +75,13 @@ type SchemaField interface {
 	embeddedObject() mo.Option[*Schema]
 }
 
-type JSONField[T constraint.FieldType] struct {
+type JSONField[T validator.FieldType] struct {
 	name       string
 	required   bool
 	array      bool
 	object     bool
 	embedded   *Schema
-	validators []constraint.Validator[T]
+	validators []validator.Validator[T]
 }
 
 func (f *JSONField[T]) AsSchemaField() SchemaField {
@@ -232,16 +233,11 @@ func (f *JSONField[T]) validate(node gjson.Result) mo.Result[any] {
 	return mo.Ok[any](val)
 }
 
-// overflowError creates a standard error for integer overflow.
-func overflowError[T any](v T) error {
-	return fmt.Errorf("for type %T: %w", v, constraint.ErrIntegerOverflow)
-}
-
 // typedJson attempts to convert a gjson.Result into the specified FieldType.
 // It returns a mo.Result[T] which contains the typedJson value on success,
 // or an error if the type conversion fails or the raw type does not match
 // the expected Go type.
-func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
+func typedJson[T validator.FieldType](res gjson.Result) mo.Result[T] {
 	var zero T
 	targetType := reflect.TypeOf(zero)
 
@@ -264,7 +260,7 @@ func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		val := res.Int()
 		if strconv.FormatInt(val, 10) != res.Raw {
 			if strings.Contains(res.Raw, ".") {
-				return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", constraint.ErrTypeMismatch, res.Raw))
+				return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to integer type", validator.ErrTypeMismatch, res.Raw))
 			}
 			return mo.Err[T](overflowError(zero))
 		}
@@ -287,7 +283,7 @@ func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		val := res.Uint()
 		if strconv.FormatUint(val, 10) != res.Raw {
 			if strings.Contains(res.Raw, ".") {
-				return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to unsigned integer type", constraint.ErrTypeMismatch, res.Raw))
+				return mo.Err[T](fmt.Errorf("%w: cannot assign float value %s to unsigned integer type", validator.ErrTypeMismatch, res.Raw))
 			}
 			return mo.Err[T](overflowError(zero))
 		}
@@ -332,70 +328,28 @@ func typedJson[T constraint.FieldType](res gjson.Result) mo.Result[T] {
 		}
 		fallthrough
 	default:
-		return mo.Err[T](fmt.Errorf("%w: unsupported type %T", constraint.ErrTypeMismatch, zero))
+		return mo.Err[T](fmt.Errorf("%w: unsupported type %T", validator.ErrTypeMismatch, zero))
 	}
 
 	// Default error for unhandled or mismatched types.
-	return mo.Err[T](fmt.Errorf("%w: expected %T but got raw type %s", constraint.ErrTypeMismatch, zero, res.Type))
+	return mo.Err[T](fmt.Errorf("%w: expected %T but got raw type %s", validator.ErrTypeMismatch, zero, res.Type))
 }
 
 // typedString attempts to convert a string into the specified FieldType.
 // It returns a mo.Result[T] which contains the typed value on success,
 // or an error if the type conversion fails or the string cannot be parsed
 // into the expected Go type.
-func typedString[T constraint.FieldType](s string) mo.Result[T] {
-	var zero T
-	targetType := reflect.TypeOf(zero)
-
-	switch targetType.Kind() {
-	case reflect.String:
-		return mo.Ok(any(s).(T))
-	case reflect.Bool:
-		b, err := strconv.ParseBool(s)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse '%s' as bool: %w", s, err))
-		}
-		return mo.Ok(any(b).(T))
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		val, err := strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse '%s' as int: %w", s, err))
-		}
-		if reflect.New(targetType).Elem().OverflowInt(val) {
-			return mo.Err[T](overflowError(zero))
-		}
-		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		val, err := strconv.ParseUint(s, 10, 64)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse '%s' as uint: %w", s, err))
-		}
-		if reflect.New(targetType).Elem().OverflowUint(val) {
-			return mo.Err[T](overflowError(zero))
-		}
-		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
-	case reflect.Float32, reflect.Float64:
-		val, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return mo.Err[T](fmt.Errorf("could not parse '%s' as float: %w", s, err))
-		}
-		if reflect.New(targetType).Elem().OverflowFloat(val) {
-			return mo.Err[T](fmt.Errorf("value %f overflows type %T", val, zero))
-		}
-		return mo.Ok(reflect.ValueOf(val).Convert(targetType).Interface().(T))
-	case reflect.Struct:
-		if targetType == reflect.TypeOf(time.Time{}) {
-			for _, layout := range timeLayouts {
-				if t, err := time.Parse(layout, s); err == nil {
-					return mo.Ok(any(t).(T))
-				}
-			}
-			return mo.Err[T](fmt.Errorf("incorrect date format for string '%s'", s))
-		}
-		fallthrough
-	default:
-		return mo.Err[T](fmt.Errorf("%w: unsupported type %T for URL parameter", constraint.ErrTypeMismatch, zero))
+func typedString[T validator.FieldType](s string) mo.Result[T] {
+	v, err := meta.ParseStringTo[T](s)
+	if err != nil {
+		return mo.Err[T](err)
 	}
+	return mo.Ok(v)
+}
+
+// overflowError creates a standard error for integer overflow.
+func overflowError[T any](v T) error {
+	return meta.OverflowError(v)
 }
 
 // FieldProvider is an interface for any type that can provide a SchemaField.
@@ -426,7 +380,7 @@ func ArrayOfObjectField(name string, nested *Schema) *JSONField[string] {
 // ArrayField creates a FieldFunc for an array field.
 // It is intended to be used for array fields that contain primitive types.
 // The name of the array field should not contain '#' and `.`.
-func ArrayField[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
+func ArrayField[T validator.FieldType](name string, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
 	return trait[T](name, true, false, nil, vfs...)
 }
 
@@ -435,16 +389,16 @@ func ArrayField[T constraint.FieldType](name string, vfs ...constraint.ValidateF
 // The returned FieldFunc can then be used to create a JSONField,
 // allowing for additional validators to be chained.
 // The name of the field should not contain '#' and `.`.
-func Field[T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
+func Field[T validator.FieldType](name string, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
 	return trait[T](name, false, false, nil, vfs...)
 }
 
-func trait[T constraint.FieldType](name string, isArray, isObject bool, nested *Schema, vfs ...constraint.ValidateFunc[T]) *JSONField[T] {
+func trait[T validator.FieldType](name string, isArray, isObject bool, nested *Schema, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
 	if strings.ContainsAny(name, ".#") {
 		panic(fmt.Sprintf("dvo: field name '%s' cannot contain '.' or '#'", name))
 	}
 	names := make(map[string]struct{})
-	var nf []constraint.Validator[T]
+	var nf []validator.Validator[T]
 	for _, v := range vfs {
 		n, f := v()
 		if _, exists := names[n]; exists {
@@ -1024,7 +978,7 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 			urlValue, ok := urlPair[field.Name()]
 			if !ok {
 				if field.Required() {
-					errs.add(field.Name(), fmt.Errorf("%s %w", field.Name(), constraint.ErrRequired))
+					errs.add(field.Name(), fmt.Errorf("%s %w", field.Name(), validator.ErrRequired))
 				}
 				continue
 			}

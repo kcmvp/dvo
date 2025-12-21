@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/entity"
 	sample "github.com/kcmvp/dvo/sample/entity"
 	"github.com/kcmvp/dvo/sample/gen/field/account"
@@ -19,6 +18,7 @@ import (
 	"github.com/kcmvp/dvo/sample/gen/field/product"
 	"github.com/kcmvp/dvo/sample/gen/field/profile"
 	"github.com/kcmvp/dvo/sample/gen/field/role"
+	"github.com/kcmvp/dvo/view"
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
 )
@@ -387,7 +387,7 @@ func TestSQL_Select_NilSchemaError(t *testing.T) {
 }
 
 func TestSQL_Select_EmptySchemaError(t *testing.T) {
-	s := &Schema[sample.Account]{Schema: dvo.WithFields()}
+	s := &Schema[sample.Account]{Schema: view.WithFields()}
 	_, _, err := selectSQL[sample.Account](s, nil)
 	require.Error(t, err)
 }

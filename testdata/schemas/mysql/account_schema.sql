@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     id BIGINT PRIMARY KEY,
     email TEXT UNIQUE,
     nick_name varchar(100) NOT NULL UNIQUE DEFAULT 'anonymous',
+    category integer DEFAULT 0,
     balance DOUBLE,
     created_at DATETIME,
     updated_at DATETIME,
@@ -12,4 +13,3 @@ CREATE TABLE IF NOT EXISTS accounts (
     updated_by TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts (email);
-

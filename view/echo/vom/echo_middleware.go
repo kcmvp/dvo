@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
+	"github.com/kcmvp/dvo/view"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -51,7 +51,7 @@ func urlParams(ctx echo.Context) map[string]string {
 
 // Bind returns an Echo middleware function that validates incoming JSON request bodies
 // against the provided dvo.Schema schema.
-func Bind(schema *dvo.Schema) echo.MiddlewareFunc {
+func Bind(schema *view.Schema) echo.MiddlewareFunc {
 	// The returned function is the actual middleware that will be executed for each request.
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		// This is the handler function that Echo will call.
@@ -101,11 +101,11 @@ func Bind(schema *dvo.Schema) echo.MiddlewareFunc {
 // type-safe data that has been processed by the Bind middleware.
 // It returns nil if the ValueObject is not found in the context, which might
 // happen if the middleware was not used for the route.
-func ValueObject(c echo.Context) dvo.ValueObject {
+func ValueObject(c echo.Context) view.ValueObject {
 	// Retrieve the value from the request's context using the predefined key.
 	if val := c.Request().Context().Value(internal.ViewObjectKey); val != nil {
 		// Perform a type assertion to ensure the value is of the expected type.
-		if vo, ok := val.(dvo.ValueObject); ok {
+		if vo, ok := val.(view.ValueObject); ok {
 			return vo
 		}
 	}

@@ -3,8 +3,9 @@ package entity
 import (
 	"fmt"
 
-	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/constraint"
+	"github.com/kcmvp/dvo/meta"
+	"github.com/kcmvp/dvo/validator"
+	"github.com/kcmvp/dvo/view"
 )
 
 // Entity defines the contract for database-aware models.
@@ -16,7 +17,7 @@ type Entity interface {
 // It is used to accept fields from different entities in join queries.
 // The unexported method ensures that only types from this package can implement it.
 type JoinFieldProvider interface {
-	dvo.FieldProvider
+	view.FieldProvider
 	QualifiedName() string
 	seal()
 }
@@ -29,7 +30,7 @@ type FieldProvider[E Entity] interface {
 
 // persistentField is the private generic struct that implements FieldProvider.
 type persistentField[E Entity] struct {
-	dvo.FieldProvider
+	view.FieldProvider
 	table string
 }
 
@@ -45,11 +46,14 @@ func (f persistentField[E]) QualifiedName() string {
 // Field returns a entity.FieldProvider for use in persistence-layer schemas.
 // The returned provider is strictly typed to the entity `E`, preventing cross-entity field mixing.
 // It is a top-level factory function that constructs the fully qualified "table.column" name.
-func Field[E Entity, T constraint.FieldType](name string, vfs ...constraint.ValidateFunc[T]) FieldProvider[E] {
+func Field[E Entity, T validator.FieldType](name string, vfs ...validator.ValidateFunc[T]) FieldProvider[E] {
 	var entity E
 	tableName := entity.Table()
-	// Create the standard field provider with the simple name.
-	fieldProvider := dvo.Field[T](name, vfs...)
+	// Build meta metadata using provider name for now. Generator will later emit
+	// full metadata (column/json/table) into generated code.
+	fm := meta.Field(name, name, name)
+	// Create the runtime dvo.FieldProvider using the provider name and validators.
+	fieldProvider := view.Field[T](fm.Provider, vfs...)
 
 	// Wrap it in our private generic struct to satisfy the FieldProvider[E] interface.
 	return persistentField[E]{FieldProvider: fieldProvider, table: tableName}
