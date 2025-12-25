@@ -1,0 +1,12 @@
+{
+  "id": "req-123",
+  "user": {
+    "name": "John Doe",
+    "email": "john.doe@example.com"
+  },
+  "tags": ["go", "dvo", "testing"],
+  "items": [
+    { "id": 1, "name": "Item A" },
+    "this is not an object"
+  ]
+}
