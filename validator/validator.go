@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/mail"
 	"net/url"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -374,4 +376,69 @@ func isLessThan[T Number | time.Time](a, b T) bool {
 		return v < any(b).(float64)
 	}
 	return false
+}
+
+// DefaultTimeLayouts are the default layouts used to parse time strings.
+var DefaultTimeLayouts = []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
+
+// ParseStringTo converts a string into the specified FieldType T.
+// This is shared by view/value layers when converting URL params into typed values.
+func ParseStringTo[T FieldType](s string) (T, error) {
+	var zero T
+	targetType := reflect.TypeOf(zero)
+
+	switch targetType.Kind() {
+	case reflect.String:
+		return any(s).(T), nil
+	case reflect.Bool:
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return zero, fmt.Errorf("could not parse '%s' as bool: %w", s, err)
+		}
+		return any(b).(T), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		val, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return zero, fmt.Errorf("could not parse '%s' as int: %w", s, err)
+		}
+		if reflect.New(targetType).Elem().OverflowInt(val) {
+			return zero, OverflowError(zero)
+		}
+		return reflect.ValueOf(val).Convert(targetType).Interface().(T), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		val, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return zero, fmt.Errorf("could not parse '%s' as uint: %w", s, err)
+		}
+		if reflect.New(targetType).Elem().OverflowUint(val) {
+			return zero, OverflowError(zero)
+		}
+		return reflect.ValueOf(val).Convert(targetType).Interface().(T), nil
+	case reflect.Float32, reflect.Float64:
+		val, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return zero, fmt.Errorf("could not parse '%s' as float: %w", s, err)
+		}
+		if reflect.New(targetType).Elem().OverflowFloat(val) {
+			return zero, fmt.Errorf("value %f overflows type %T", val, zero)
+		}
+		return reflect.ValueOf(val).Convert(targetType).Interface().(T), nil
+	case reflect.Struct:
+		if targetType == reflect.TypeOf(time.Time{}) {
+			for _, layout := range DefaultTimeLayouts {
+				if t, err := time.Parse(layout, s); err == nil {
+					return any(t).(T), nil
+				}
+			}
+			return zero, fmt.Errorf("incorrect date format for string '%s'", s)
+		}
+		fallthrough
+	default:
+		return zero, fmt.Errorf("type mismatch or unsupported type %T", zero)
+	}
+}
+
+// OverflowError returns a standard overflow error wrapping ErrIntegerOverflow.
+func OverflowError[T any](v T) error {
+	return fmt.Errorf("for type %T: %w", v, ErrIntegerOverflow)
 }

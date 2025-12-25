@@ -1128,7 +1128,7 @@ func TestEndToEnd(t *testing.T) {
 		check   func(t *testing.T, vo ValueObject)
 	}{
 		{
-			name: "valid user",
+			name:    "valid user",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
 				// Clause
@@ -1210,15 +1210,15 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid rating",
+			name:    "invalid rating",
 			isValid: false,
 		},
 		{
-			name: "missing required field",
+			name:    "missing required field",
 			isValid: false,
 		},
 		{
-			name: "valid user with all optional fields",
+			name:    "valid user with all optional fields",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
 				// Check optional fields that are present
@@ -1278,7 +1278,7 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 		{
-			name: "valid user without optional email",
+			name:    "valid user without optional email",
 			isValid: true,
 			check: func(t *testing.T, vo ValueObject) {
 				_, ok := vo.String("email").Get()
@@ -1297,27 +1297,27 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid username charset",
+			name:    "invalid username charset",
 			isValid: false,
 		},
 		{
-			name: "invalid countryCode length",
+			name:    "invalid countryCode length",
 			isValid: false,
 		},
 		{
-			name: "invalid tags pattern",
+			name:    "invalid tags pattern",
 			isValid: false,
 		},
 		{
-			name: "invalid homepage url",
+			name:    "invalid homepage url",
 			isValid: false,
 		},
 		{
-			name: "invalid status",
+			name:    "invalid status",
 			isValid: false,
 		},
 		{
-			name: "invalid salary",
+			name:    "invalid salary",
 			isValid: false,
 		},
 	}

@@ -19,6 +19,8 @@ To keep the repository stable and maintain a clear, incremental migration path, 
 
 - Meta as authoritative metadata: Move runtime schema/field metadata into the `meta` layer (and emitted generated files). Runtime code should consume the metadata from generated artifacts rather than re-scanning entity structs.
 
+- Schema and ValueObject ownership: The canonical definitions for `Schema` (the structural blueprint) and `ValueObject` (the typed/validated payload shape) live in the `meta` package. They are implemented and maintained in `meta`, and are treated as the shared, minimal data contracts used by both `value` and `view`. The `view` package may extend or wrap these types to provide view-specific validation rules, helpers, or helper constructors, but the core data shapes and stable semantics belong to `meta`.
+
 - Keep table info stable: `entity` may expose `Table()` and `entity`-level helpers, but the generator should emit `Table` into generated `FieldMeta` when available. Prefer consuming generator-emitted table metadata for DDL and SQL generation to avoid re-invoking entity methods at runtime.
 
 - Field factory signature and responsibility split:
@@ -44,7 +46,8 @@ Quick summary of responsibilities
 
 - meta
   - Core, low-level primitives and helpers describing field identity and metadata.
-  - No JSON parsing, no validators, no DB driver specifics.
+  - Owns the canonical `Schema` and `ValueObject` definitions (shared contracts): structural blueprint for entities, typed validated payload shape and helpers to create/inspect them.
+  - No JSON parsing, no validators, no DB driver specifics in the core metadata types — the `meta` package defines stable data shapes and operations that the generator and runtime consume.
   - Key responsibilities: field collection (expand embeds), deterministic naming (snake_case), ordering, type classification (buckets), lightweight validations (unsupported types), and stable small structs for codegen.
 
 - field
@@ -54,13 +57,14 @@ Quick summary of responsibilities
 
 - value
   - Persistence-oriented data transfer objects and mapping helpers.
+  - Uses `meta.Schema`/`meta.ValueObject` as the shared payload contract for persistence operations.
   - Scans DB rows into value containers, maps validated view input into persistence-ready values.
   - Uses `field` identifiers to map column names and types.
 
 - view
-  - All HTTP request parsing and validation logic.
-  - Uses `field` identifiers (or `meta.FieldRef`) to build validation schemas.
-  - Produces `value` objects for persistence and renders `value` objects to JSON for responses.
+  - Responsible for request/response validation and presentation logic, built on top of `meta` contracts.
+  - Uses `meta.Schema` and `meta.ValueObject` (or small view-level adapters/wrappers) to validate incoming JSON and produce outgoing representations.
+  - Extends or wraps `meta` types with view-specific helpers, binds validators (from `validator` package) to `field` providers, and exposes middleware helpers (framework-level wrappers for gin/echo/fiber).
 
 Public contracts (shapes and functions — signatures only)
 

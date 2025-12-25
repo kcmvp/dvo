@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kcmvp/dvo/meta"
 	"github.com/kcmvp/dvo/validator"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -131,8 +130,8 @@ func (f *JSONField[T]) validateRaw(v string) mo.Result[any] {
 
 	val := typedValResult.MustGet()
 	// Run validators on the successfully parsed value.
-	for _, validator := range f.validators {
-		if err := validator(val); err != nil {
+	for _, vfn := range f.validators {
+		if err := vfn(val); err != nil {
 			err = fmt.Errorf("field '%s': %w", f.Name(), err)
 			return mo.Err[any](err)
 		}
@@ -340,7 +339,7 @@ func typedJson[T validator.FieldType](res gjson.Result) mo.Result[T] {
 // or an error if the type conversion fails or the string cannot be parsed
 // into the expected Go type.
 func typedString[T validator.FieldType](s string) mo.Result[T] {
-	v, err := meta.ParseStringTo[T](s)
+	v, err := validator.ParseStringTo[T](s)
 	if err != nil {
 		return mo.Err[T](err)
 	}
@@ -349,7 +348,7 @@ func typedString[T validator.FieldType](s string) mo.Result[T] {
 
 // overflowError creates a standard error for integer overflow.
 func overflowError[T any](v T) error {
-	return meta.OverflowError(v)
+	return validator.OverflowError(v)
 }
 
 // FieldProvider is an interface for any type that can provide a SchemaField.
