@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -44,6 +45,7 @@ type TemplateData struct {
 	Imports          []string
 	Fields           []Field
 	ModulePath       string
+	ModulePkgName    string
 	EntityImportPath string
 	GeneratedAt      time.Time
 }
@@ -308,12 +310,22 @@ func generateFieldsFromMeta(metas []EntityMeta) error {
 			return "", false
 		}))
 
+		// compute module package name heuristically: try to load package to get declared name,
+		// fall back to last path element if load fails.
+		modulePkgName := path.Base(internal.ToolModulePath())
+		if pkgs, _ := packages.Load(&packages.Config{Mode: packages.NeedName}, internal.ToolModulePath()); len(pkgs) > 0 {
+			if pkgs[0].Name != "" {
+				modulePkgName = pkgs[0].Name
+			}
+		}
+
 		data := TemplateData{
 			PackageName:      strings.ToLower(meta.StructName),
 			StructName:       meta.StructName,
 			Imports:          imports,
 			Fields:           meta.Fields,
 			ModulePath:       internal.ToolModulePath(),
+			ModulePkgName:    modulePkgName,
 			EntityImportPath: meta.PkgPath,
 			GeneratedAt:      time.Now(),
 		}
@@ -337,7 +349,7 @@ func generateFieldsFromMeta(metas []EntityMeta) error {
 		if err := os.WriteFile(outputPath, formatted, 0644); err != nil {
 			return fmt.Errorf("failed to write generated file for %s: %w", meta.StructName, err)
 		}
-		fmt.Printf("Generated field helpers for %s at %s\n", meta.StructName, outputPath)
+		// generation info suppressed in non-verbose mode
 	}
 	return nil
 }
@@ -389,7 +401,7 @@ func generateSchemaFromMeta(ctx context.Context, metas []EntityMeta) error {
 			if err := os.WriteFile(outputPath, buf.Bytes(), 0644); err != nil {
 				return fmt.Errorf("failed to write generated schema for %s: %w", meta.StructName, err)
 			}
-			fmt.Printf("Generated schema for %s at %s\n", meta.StructName, outputPath)
+			// generation info suppressed in non-verbose mode
 		}
 	}
 

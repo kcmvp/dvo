@@ -89,7 +89,7 @@ func makePlaceholders(n int) string {
 	return strings.Join(ps, ",")
 }
 
-func op(field dvo.Field, operator string, value any) Where {
+func op(field xql.Field, operator string, value any) Where {
 	f := func() (string, []any) {
 		clause := fmt.Sprintf("%s %s ?", dbQualifiedNameFromQName(field.QualifiedName()), operator)
 		return clause, []any{value}
@@ -97,7 +97,7 @@ func op(field dvo.Field, operator string, value any) Where {
 	return whereFunc(f)
 }
 
-func inWhere(field dvo.Field, values ...any) Where {
+func inWhere(field xql.Field, values ...any) Where {
 	if len(values) == 0 {
 		return whereFunc(func() (string, []any) { return "1=0", nil })
 	}
@@ -235,12 +235,10 @@ func updateSQLFromValues[T entity.Entity](g ValueObject, where Where) (string, [
 		switch sv := v.(type) {
 		case Schema:
 			schema = sv
-		case []dvo.Field:
+		case []xql.Field:
 			schema = Schema(sv)
-		case *[]dvo.Field:
+		case *[]xql.Field:
 			schema = Schema(*sv)
-		case *Schema:
-			schema = *sv
 		default:
 			// ignore and fallback to Fields()
 		}

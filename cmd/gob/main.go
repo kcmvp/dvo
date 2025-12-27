@@ -20,7 +20,6 @@ var rootCmd = &cobra.Command{
 project scaffolding, and development utilities to accelerate Go development.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if internal.Current != nil {
-			fmt.Printf("Project root is %s\n", internal.Current.Root)
 			blockPrefixes := []string{
 				fmt.Sprintf("%s/cmd", internal.ToolModulePath()),
 				fmt.Sprintf("%s/sample", internal.ToolModulePath()),
@@ -34,7 +33,7 @@ project scaffolding, and development utilities to accelerate Go development.`,
 				}
 			}
 		} else {
-			fmt.Printf("Project is not initialized\n")
+			// nothing to do when project is not initialized
 		}
 		return nil
 	},
