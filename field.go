@@ -23,7 +23,7 @@ import (
 //
 // Typical usage (generator-emitted code):
 //
-//   var ID = NewField[Account, int64]("ID", "id", "id")
+//   var ID = NewField[Account, int64]("id", "ID")
 //   // Schema values are slices of Field produced by generator code.
 //
 // Notes on layering:
@@ -42,16 +42,14 @@ import (
 // implementing Field; only code inside this module (and generator-produced
 // code that lives in the same module) may implement Field.
 type Field interface {
+	// Scope returns the field's scope. it returns the table name for a persistent field; returns null for a non-persistent field.
+	Scope() string
 	// Name returns the provider identifier used by generated code and by
 	// view validation. It should be unique inside a Schema.
 	Name() string
 	// QualifiedName returns a DB-qualified column reference in the form
 	// "table.column". Consumers (SQL builders) rely on this format.
 	QualifiedName() string
-	// ViewName returns the JSON/view key used when building or validating
-	// ValueObjects. It may differ from Name() when a separate JSON key is
-	// desired for presentation.
-	ViewName() string
 	// seal prevents external implementations of Field.
 	seal()
 }
@@ -71,7 +69,7 @@ type FieldType interface {
 
 // PersistentField is a semantic alias: a Field that carries a Go type
 // parameter to enable type-safe validator factories or codegen hints.
-type PersistentField[E FieldType] interface {
+type PersistentField interface {
 	Field
 }
 
@@ -79,18 +77,18 @@ type PersistentField[E FieldType] interface {
 // PersistentField. The fields are all unexported; instances are produced
 // using `NewField`.
 type persistentField[E FieldType] struct {
-	table    string
-	name     string
-	column   string
-	viewName string
-	vfs      []ValidateFunc[E]
+	table  string
+	column string
+	view   string
+	vfs    []ValidateFunc[E]
 }
 
-// Name returns the provider identifier (usually the Go exported field name).
-func (f persistentField[E]) Name() string { return f.name }
+func (f persistentField[E]) Scope() string {
+	return f.table
+}
 
-// ViewName returns the JSON/view-facing key associated with this field.
-func (f persistentField[E]) ViewName() string { return f.viewName }
+// Name returns column name associated with this field.
+func (f persistentField[E]) Name() string { return f.column }
 
 // seal implements the package-only sealing marker.
 func (f persistentField[E]) seal() {}
@@ -101,14 +99,14 @@ func (f persistentField[E]) QualifiedName() string {
 	return fmt.Sprintf("%s.%s", f.table, f.column)
 }
 
-var _ PersistentField[int64] = (*persistentField[int64])(nil)
+var _ PersistentField = (*persistentField[int64])(nil)
 
 // NewField creates a PersistentField for entity type E with Go type hint T.
 //
 // Parameters:
-//   - name: provider identifier (Go field name). Must be non-empty.
 //   - column: DB column name. Must be non-empty.
-//   - view: JSON/view key name. Must be non-empty.
+//   - view: JSON/view key name (also used as the provider name when the
+//     generator does not supply an explicit provider name). Must be non-empty.
 //   - vfs: optional validator factory functions for the field.
 //
 // Behavior:
@@ -118,19 +116,17 @@ var _ PersistentField[int64] = (*persistentField[int64])(nil)
 //
 // Example:
 //
-//	var ID = NewField[Account, int64]("ID", "id", "id")
-func NewField[E entity.Entity, T FieldType](name string, column string, view string, vfs ...ValidateFunc[T]) PersistentField[T] {
+//	var ID = NewField[Account, int64]("id", "ID")
+func NewField[E entity.Entity, T FieldType](column string, view string, vfs ...ValidateFunc[T]) PersistentField {
 	var e E
 	table := e.Table()
 	lo.Assert(table != "", "table must not return empty string")
-	lo.Assert(name != "", "name must not return empty string")
 	lo.Assert(column != "", "column must not return empty string")
 	lo.Assert(view != "", "view must not return empty string")
 	return &persistentField[T]{
-		table:    table,
-		name:     name,
-		column:   column,
-		viewName: view,
-		vfs:      vfs,
+		table:  table,
+		column: column,
+		view:   view,
+		vfs:    vfs,
 	}
 }

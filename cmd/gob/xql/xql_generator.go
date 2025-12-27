@@ -3,9 +3,13 @@ package xql
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/format"
 	"go/token"
 	"go/types"
@@ -13,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -36,6 +41,7 @@ type SchemaTemplateData struct {
 	TableName   string
 	Fields      []Field
 	GeneratedAt time.Time
+	Version     string
 }
 
 // TemplateData holds the data passed to the template for execution.
@@ -48,6 +54,7 @@ type TemplateData struct {
 	ModulePkgName    string
 	EntityImportPath string
 	GeneratedAt      time.Time
+	Version          string
 }
 
 // Field represents a single column in a database table, derived from a Go struct field.
@@ -263,25 +270,118 @@ func resolveTableName(project *internal.Project, pkgPath, structName string) (st
 					return true
 				}
 
-				// We only support: `return "..."` to keep it deterministic.
+				// Try to find a return statement and evaluate its result to a stable string.
 				if fn.Body == nil || len(fn.Body.List) == 0 {
 					return true
 				}
-				ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
-				if !ok || len(ret.Results) == 0 {
+
+				// look for the first ReturnStmt with at least one result
+				var retExpr ast.Expr
+				for _, stmt := range fn.Body.List {
+					if r, ok := stmt.(*ast.ReturnStmt); ok && len(r.Results) > 0 {
+						retExpr = r.Results[0]
+						break
+					}
+				}
+				if retExpr == nil {
 					return true
 				}
-				lit, ok := ret.Results[0].(*ast.BasicLit)
-				if !ok || lit.Kind != token.STRING {
-					return true
+
+				if s, ok := evalStringExpr(retExpr, pkg, file); ok {
+					tableName = s
+					return false
 				}
-				tableName = strings.Trim(lit.Value, `"`)
-				return false
+				return true
 			})
 		}
 	}
 
 	return tableName, nil
+}
+
+// evalStringExpr attempts to evaluate an AST expression to a string constant.
+// It supports:
+//   - string basic literals
+//   - identifiers that reference package-level constants in the same package
+//   - selector expressions referencing imported package constants (best-effort)
+//   - parenthesized expressions
+//   - binary concatenation using + (recursive)
+func evalStringExpr(expr ast.Expr, pkg *packages.Package, file *ast.File) (string, bool) {
+	switch e := expr.(type) {
+	case *ast.BasicLit:
+		if e.Kind == token.STRING {
+			return strings.Trim(e.Value, `"`), true
+		}
+		return "", false
+	case *ast.Ident:
+		// try to resolve an identifier to a constant via types info
+		if obj := pkg.TypesInfo.Uses[e]; obj != nil {
+			if c, ok := obj.(*types.Const); ok {
+				if val := c.Val(); val != nil {
+					if val.Kind() == constant.String {
+						return constant.StringVal(val), true
+					}
+				}
+			}
+		}
+		// also check defs (in-case of const defined in the same file)
+		if obj := pkg.TypesInfo.Defs[e]; obj != nil {
+			if c, ok := obj.(*types.Const); ok {
+				if val := c.Val(); val != nil {
+					if val.Kind() == constant.String {
+						return constant.StringVal(val), true
+					}
+				}
+			}
+		}
+		return "", false
+	case *ast.SelectorExpr:
+		// try to resolve imported package constant: X.Sel
+		if ident, ok := e.X.(*ast.Ident); ok {
+			pkgName := ident.Name
+			sel := e.Sel.Name
+			// find corresponding import path in the file's imports
+			for _, imp := range file.Imports {
+				impPath := strings.Trim(imp.Path.Value, `"`)
+				local := ""
+				if imp.Name != nil {
+					local = imp.Name.Name
+				} else {
+					local = path.Base(impPath)
+				}
+				if local == pkgName {
+					// find loaded package with this path
+					for _, p := range pkg.Types.Imports() {
+						if p.Path() == impPath {
+							if obj := p.Scope().Lookup(sel); obj != nil {
+								if c, ok := obj.(*types.Const); ok {
+									if val := c.Val(); val != nil {
+										if val.Kind() == constant.String {
+											return constant.StringVal(val), true
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return "", false
+	case *ast.BinaryExpr:
+		if e.Op == token.ADD {
+			l, lok := evalStringExpr(e.X, pkg, file)
+			r, rok := evalStringExpr(e.Y, pkg, file)
+			if lok && rok {
+				return l + r, true
+			}
+		}
+		return "", false
+	case *ast.ParenExpr:
+		return evalStringExpr(e.X, pkg, file)
+	default:
+		return "", false
+	}
 }
 
 // generateFieldsFromMeta generates field helpers from the precomputed entity metadata.
@@ -328,6 +428,7 @@ func generateFieldsFromMeta(metas []EntityMeta) error {
 			ModulePkgName:    modulePkgName,
 			EntityImportPath: meta.PkgPath,
 			GeneratedAt:      time.Now(),
+			Version:          computeEntityVersion(meta),
 		}
 
 		outputDir := filepath.Join(project.GenPath(), "field", data.PackageName)
@@ -386,6 +487,7 @@ func generateSchemaFromMeta(ctx context.Context, metas []EntityMeta) error {
 				TableName:   meta.TableName,
 				Fields:      fields,
 				GeneratedAt: time.Now(),
+				Version:     computeEntityVersion(meta),
 			}
 
 			outputDir := filepath.Join(project.GenPath(), "schemas", adapter)
@@ -627,6 +729,66 @@ func pkConstraintFor(goType string, sqlType string, adapter string, driversJSON 
 		}
 	}
 	return "", ""
+}
+
+// computeEntityVersion builds a deterministic fingerprint for an entity based on
+// the resolved table name and the exported fields that affect generation.
+// It includes each field's GoName, GoType, generated column name (Name), DBType
+// and parsed directive flags. Fields are sorted by GoName to avoid churn from
+// reordering.
+func computeEntityVersion(meta EntityMeta) string {
+	type vf struct {
+		GoName     string `json:"goName"`
+		GoType     string `json:"goType"`
+		Name       string `json:"name"`
+		DBType     string `json:"dbType"`
+		IsPK       bool   `json:"isPK"`
+		IsNotNull  bool   `json:"isNotNull"`
+		IsUnique   bool   `json:"isUnique"`
+		IsIndexed  bool   `json:"isIndexed"`
+		Default    string `json:"default"`
+		FKTable    string `json:"fkTable"`
+		FKColumn   string `json:"fkColumn"`
+		IsEmbedded bool   `json:"isEmbedded"`
+	}
+
+	vfs := make([]vf, 0, len(meta.Fields))
+	for _, f := range meta.Fields {
+		vfs = append(vfs, vf{
+			GoName:     f.GoName,
+			GoType:     f.GoType,
+			Name:       f.Name,
+			DBType:     f.DBType,
+			IsPK:       f.IsPK,
+			IsNotNull:  f.IsNotNull,
+			IsUnique:   f.IsUnique,
+			IsIndexed:  f.IsIndexed,
+			Default:    f.Default,
+			FKTable:    f.FKTable,
+			FKColumn:   f.FKColumn,
+			IsEmbedded: f.IsEmbedded,
+		})
+	}
+
+	// Sort by GoName then GoType to make ordering deterministic and avoid churn due to reordering.
+	sort.SliceStable(vfs, func(i, j int) bool {
+		if vfs[i].GoName == vfs[j].GoName {
+			return vfs[i].GoType < vfs[j].GoType
+		}
+		return vfs[i].GoName < vfs[j].GoName
+	})
+
+	payload := struct {
+		Table  string `json:"table"`
+		Fields []vf   `json:"fields"`
+	}{
+		Table:  meta.TableName,
+		Fields: vfs,
+	}
+
+	b, _ := json.Marshal(payload)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:10]
 }
 
 var _ = errors.New

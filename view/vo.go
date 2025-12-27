@@ -445,6 +445,10 @@ func WithFields(providers ...FieldProvider) *Schema {
 	return &Schema{fields: fields, allowUnknownFields: false}
 }
 
+func PersistentSchema(fields ...xql.PersistentField) *Schema {
+	panic("dvo: PersistentSchema is deprecated; use WithFields instead")
+}
+
 // AllowUnknownFields is a fluent method to make the Schema accept JSON/url params
 // that contain fields not defined in the schema. Default behavior is to disallow.
 func (s *Schema) AllowUnknownFields() *Schema {
@@ -691,20 +695,4 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 	return lo.Ternary(errs.err() != nil, mo.Err[ValueObject](errs.err()), mo.Ok[ValueObject](valueObject{
 		Data: object,
 	}))
-}
-
-// PersistentViewField builds a typed JSONField[T] directly from a
-// `xql.PersistentField[T]`. This is the preferred API when you have access
-// to the generator-produced typed persistent field variable because it
-// enforces the type parameter at compile time and avoids runtime mismatches.
-func PersistentViewField[T validator.FieldType](pf xql.PersistentField[T], vfs ...validator.ValidateFunc[T]) *JSONField[T] {
-	return trait[T](pf.ViewName(), false, false, nil, vfs...)
-}
-
-// PersistentArrayField builds a typed JSONField[T] for a JSON array from a
-// pure meta `xql.Field` (generator-produced). The caller provides the element
-// type parameter T so the returned JSONField expects an array of T.
-// This avoids requiring the meta to be parameterized as `PersistentField[[]T]`.
-func PersistentArrayField[T validator.FieldType](f xql.Field, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
-	return trait[T](f.ViewName(), true, false, nil, vfs...)
 }
