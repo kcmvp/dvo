@@ -440,7 +440,7 @@ func TestSqlGeneration_Update(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			valuesVO := dvo.NewValueObject(map[string]any{"__schema": schema})
+			valuesVO := NewValueObject(map[string]any{"__schema": schema})
 			exec := Update[Order](valuesVO)(c.where)
 			require.NotNil(t, exec)
 
@@ -494,7 +494,7 @@ func TestSqlGeneration_Update(t *testing.T) {
 
 	for _, c := range complexCases {
 		t.Run(c.name, func(t *testing.T) {
-			valuesVO := dvo.NewValueObject(map[string]any{"__schema": schema})
+			valuesVO := NewValueObject(map[string]any{"__schema": schema})
 			exec := Update[Order](valuesVO)(c.where)
 			require.NotNil(t, exec)
 
@@ -552,7 +552,7 @@ func TestJoinAPIs_SQLGeneration(t *testing.T) {
 
 	t.Run("UpdateJoin", func(t *testing.T) {
 		// values can be nil for SQL generation test; provide __schema for updateSQLFromValues
-		valuesVO := dvo.NewValueObject(map[string]any{"__schema": schema})
+		valuesVO := NewValueObject(map[string]any{"__schema": schema})
 		exec := UpdateJoin[Order](valuesVO)(join, nil)
 		require.NotNil(t, exec)
 		q, err := exec.sql()

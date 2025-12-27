@@ -6,6 +6,7 @@ import (
 
 	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/entity"
+	"github.com/kcmvp/dvo/internal"
 	"github.com/samber/mo"
 )
 
@@ -121,7 +122,7 @@ func In(field dvo.Field, values ...any) Where {
 // Note: `sql()` is kept pure and only returns the generated SQL string and
 // an error. It is primarily useful for testing and inspection.
 type Executor interface {
-	Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error)
+	Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error)
 	// sql generates the SQL string only (pure). Arguments are produced by lower-level helpers
 	// (selectSQL/insertSQL/updateSQL/deleteSQL) and consumed by Execute when running against DB.
 	sql() (string, error)
@@ -156,7 +157,7 @@ func Delete[T entity.Entity](where Where) Executor {
 // New design: public Update accepts the update payload as a meta.ValueObject;
 // the ValueObject may include a special "__schema" entry or provide its own
 // Fields() listing. This avoids a global runtime schema registry.
-func Update[T entity.Entity](values dvo.ValueObject) func(where Where) Executor {
+func Update[T entity.Entity](values ValueObject) func(where Where) Executor {
 	return func(where Where) Executor {
 		return updateExec[T]{values: values, where: where}
 	}
@@ -181,8 +182,29 @@ func DeleteJoin[T entity.Entity](joinstmt string, where Where) Executor {
 // UpdateJoin builds an update executor that applies an EXISTS-correlated
 // join filter. The update payload values are supplied as a meta.ValueObject
 // when creating the executor via UpdateJoin[T](values)(joinstmt, where).
-func UpdateJoin[T entity.Entity](values dvo.ValueObject) func(joinstmt string, where Where) Executor {
+func UpdateJoin[T entity.Entity](values ValueObject) func(joinstmt string, where Where) Executor {
 	return func(joinstmt string, where Where) Executor {
 		return updateJoinExec[T]{values: values, joinstmt: joinstmt, where: where}
 	}
+}
+
+// ValueObject is a thin alias over internal.ValueObject to expose it
+type ValueObject interface {
+	internal.ValueObject
+	seal()
+}
+
+type valueObject struct {
+	internal.Data
+}
+
+var _ ValueObject = (*valueObject)(nil)
+
+func (vo valueObject) seal() {}
+
+func NewValueObject(m map[string]any) ValueObject {
+	if m == nil {
+		m = map[string]any{}
+	}
+	return valueObject{Data: m}
 }

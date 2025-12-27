@@ -1348,7 +1348,9 @@ func TestEndToEnd(t *testing.T) {
 
 func TestValueObject_AddUpdate(t *testing.T) {
 	t.Run("Add", func(t *testing.T) {
-		vo := make(valueObject)
+		vo := valueObject{
+			Data: map[string]any{},
+		}
 
 		// Test successful Add
 		require.NotPanics(t, func() {
@@ -1368,9 +1370,10 @@ func TestValueObject_AddUpdate(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		vo := make(valueObject)
-		vo["name"] = "gopher" // pre-populate for update
-
+		vo := valueObject{
+			Data: map[string]any{},
+		}
+		vo.Add("name", "gopher")
 		// Test successful Update
 		require.NotPanics(t, func() {
 			vo.Update("name", "gopher-updated")
@@ -1389,22 +1392,23 @@ func TestValueObject_AddUpdate(t *testing.T) {
 func TestValueObject_MustMethods(t *testing.T) {
 	now := time.Now()
 	vo := valueObject{
-		"my_string":  "hello",
-		"my_int":     int(-1),
-		"my_int8":    int8(-8),
-		"my_int16":   int16(-16),
-		"my_int32":   int32(-32),
-		"my_int64":   int64(-64),
-		"my_uint":    uint(1),
-		"my_uint8":   uint8(8),
-		"my_uint16":  uint16(16),
-		"my_uint32":  uint32(32),
-		"my_uint64":  uint64(64),
-		"my_float32": float32(32.32),
-		"my_float64": float64(64.64),
-		"my_bool":    true,
-		"my_time":    now,
-	}
+		Data: map[string]any{
+			"my_string":  "hello",
+			"my_int":     int(-1),
+			"my_int8":    int8(-8),
+			"my_int16":   int16(-16),
+			"my_int32":   int32(-32),
+			"my_int64":   int64(-64),
+			"my_uint":    uint(1),
+			"my_uint8":   uint8(8),
+			"my_uint16":  uint16(16),
+			"my_uint32":  uint32(32),
+			"my_uint64":  uint64(64),
+			"my_float32": float32(32.32),
+			"my_float64": float64(64.64),
+			"my_bool":    true,
+			"my_time":    now,
+		}}
 
 	t.Run("successful gets", func(t *testing.T) {
 		require.Equal(t, "hello", vo.MstString("my_string"))

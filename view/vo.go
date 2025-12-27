@@ -1,6 +1,7 @@
 package view
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kcmvp/dvo/internal"
 	"github.com/kcmvp/dvo/validator"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -496,100 +498,7 @@ func (s *Schema) Extend(another *Schema) *Schema {
 // If a path is malformed (e.g., non-integer index for an array, out-of-bounds index)
 // or a type mismatch occurs, all getters will panic.
 type ValueObject interface {
-	// String returns an Option containing the string value for the given name.
-	// It supports dot notation for hierarchical access (e.g., "user.name").
-	// It panics if the field exists but is not a string.
-	String(name string) mo.Option[string]
-	// MstString returns the string value for the given name.
-	// It supports dot notation for hierarchical access (e.g., "user.name").
-	// It panics if the key is not found or the value is not a string.
-	MstString(name string) string
-	// Int returns an Option containing the int value for the given name.
-	// It supports dot notation for hierarchical access (e.g., "user.age").
-	// It panics if the field exists but is not an int.
-	Int(name string) mo.Option[int]
-	// MstInt returns the int value for the given name.
-	// It supports dot notation for hierarchical access (e.g., "user.age").
-	// It panics if the key is not found or the value is not an int.
-	MstInt(name string) int
-	// Int8 returns an Option containing the int8 value for the given name.
-	// It panics if the field exists but is not an int8.
-	Int8(name string) mo.Option[int8]
-	// MstInt8 returns the int8 value for the given name.
-	// It panics if the key is not found or the value is not an int8.
-	MstInt8(name string) int8
-	// Int16 returns an Option containing the int16 value for the given name.
-	// It panics if the field exists but is not an int16.
-	Int16(name string) mo.Option[int16]
-	// MstInt16 returns the int16 value for the given name.
-	// It panics if the key is not found or the value is not an int16.
-	MstInt16(name string) int16
-	// Int32 returns an Option containing the int32 value for the given name.
-	// It panics if the field exists but is not an int32.
-	Int32(name string) mo.Option[int32]
-	// MstInt32 returns the int32 value for the given name.
-	// It panics if the key is not found or the value is not an int32.
-	MstInt32(name string) int32
-	// Int64 returns an Option containing the int64 value for the given name.
-	// It panics if the field exists but is not an int64.
-	Int64(name string) mo.Option[int64]
-	// MstInt64 returns the int64 value for the given name.
-	// It panics if the key is not found or the value is not an int64.
-	MstInt64(name string) int64
-	// Uint returns an Option containing the uint value for the given name.
-	// It panics if the field exists but is not a uint.
-	Uint(name string) mo.Option[uint]
-	// MstUint returns the uint value for the given name.
-	// It panics if the key is not found or the value is not a uint.
-	MstUint(name string) uint
-	// Uint8 returns an Option containing the uint8 value for the given name.
-	// It panics if the field exists but is not a uint8.
-	Uint8(name string) mo.Option[uint8]
-	// MstUint8 returns the uint8 value for the given name.
-	// It panics if the key is not found or the value is not a uint8.
-	MstUint8(name string) uint8
-	// Uint16 returns an Option containing the uint16 value for the given name.
-	// It panics if the field exists but is not a uint16.
-	Uint16(name string) mo.Option[uint16]
-	// MstUint16 returns the uint16 value for the given name.
-	// It panics if the key is not found or the value is not a uint16.
-	MstUint16(name string) uint16
-	// Uint32 returns an Option containing the uint32 value for the given name.
-	// It panics if the field exists but is not a uint32.
-	Uint32(name string) mo.Option[uint32]
-	// MstUint32 returns the uint32 value for the given name.
-	// It panics if the key is not found or the value is not a uint32.
-	MstUint32(name string) uint32
-	// Uint64 returns an Option containing the uint64 value for the given name.
-	// It panics if the field exists but is not a uint64.
-	Uint64(name string) mo.Option[uint64]
-	// MstUint64 returns the uint64 value for the given name.
-	// It panics if the key is not found or the value is not a uint64.
-	MstUint64(name string) uint64
-	// Float64 returns an Option containing the float64 value for the given name.
-	// It panics if the field exists but is not a float64.
-	Float64(name string) mo.Option[float64]
-	// MstFloat64 returns the float64 value for the given name.
-	// It panics if the key is not found or the value is not a float64.
-	MstFloat64(name string) float64
-	// Float32 returns an Option containing the float32 value for the given name.
-	// It panics if the field exists but is not a float32.
-	Float32(name string) mo.Option[float32]
-	// MstFloat32 returns the float32 value for the given name.
-	// It panics if the key is not found or the value is not a float32.
-	MstFloat32(name string) float32
-	// Bool returns an Option containing the bool value for the given name.
-	// It panics if the field exists but is not a bool.
-	Bool(name string) mo.Option[bool]
-	// MstBool returns the bool value for the given name.
-	// It panics if the key is not found or the value is not a bool.
-	MstBool(name string) bool
-	// Time returns an Option containing the time.Time value for the given name.
-	// It panics if the field exists but is not a time.Time.
-	Time(name string) mo.Option[time.Time]
-	// MstTime returns the time.Time value for the given name.
-	// It panics if the key is not found or the value is not a time.Time.
-	MstTime(name string) time.Time
+	internal.ValueObject
 	// StringArray returns an Option containing a slice of strings for the given name.
 	// It panics if the field exists but is not a []string.
 	StringArray(name string) mo.Option[[]string]
@@ -620,315 +529,62 @@ type ValueObject interface {
 	// MstBoolArray returns a slice of bools for the given name.
 	// It panics if the key is not found or the value is not a []bool.
 	MstBoolArray(name string) []bool
-	// Get retrieves a value of any type from the ValueObject.
-	// It supports dot notation for hierarchical access (e.g., "user.name", "items.0.id").
-	// It returns an Option, which will be `None` if the path is not found.
-	Get(string) mo.Option[any]
-	// Add adds a new property to the value object at the top level.
-	// It does not support dot notation.
-	// It panics if the property already exists.
-	Add(name string, value any)
-	// Update modifies an existing property in the value object at the top level.
-	// It does not support dot notation.
-	// It panics if the property does not exist.
-	Update(name string, value any)
 	seal()
 }
 
 // valueObject is the private, concrete implementation of the ValueObject interface.
-type valueObject map[string]any
-
-func (vo valueObject) Get(s string) mo.Option[any] {
-	return get[any](vo, s)
-}
-
-// Add adds a new property to the value object.
-// It panics if the property already exists.
-func (vo valueObject) Add(name string, value any) {
-	_, ok := vo[name]
-	lo.Assertf(!ok, "dvo: property '%s' already exists", name)
-	lo.Assertf(!strings.Contains(name, "."), "dov: property '%s' contains '.'", name)
-	vo[name] = value
-}
-
-// Update modifies an existing property in the value object.
-// It panics if the property does not exist.
-func (vo valueObject) Update(name string, value any) {
-	if _, ok := vo[name]; !ok {
-		panic(fmt.Sprintf("dvo: property '%s' does not exist", name))
-	}
-	vo[name] = value
+// It is defined as a plain map so tests can use map literals and indexing directly.
+// We forward method calls to internal.Data converters when necessary.
+type valueObject struct {
+	internal.Data
 }
 
 var _ ValueObject = (*valueObject)(nil)
 
-// seal is an empty method to satisfy the sealed ValueObject interface.
+// MarshalJSON ensures the valueObject is serialized as the underlying map
+// (i.e. the embedded Data) instead of as a struct with a "Data" field.
+func (vo valueObject) MarshalJSON() ([]byte, error) {
+	return json.Marshal(vo.Data)
+}
+
 func (vo valueObject) seal() {}
 
-// get is a generic helper to retrieve a value and assert its type.
-// It returns an Option, which will be empty if the key was not present.
-// It panics if the key exists but the type is incorrect.
-// If the path contains an invalid index for a slice, it will panic. This function
-// supports dot notation for embedded objects and array indexing (e.g., "field.0.nestedField").
-func get[T any](data valueObject, name string) mo.Option[T] {
-	parts := strings.Split(name, ".")
-	var currentValue any = data
-	for _, part := range parts {
-		if currentValue == nil {
-			return mo.None[T]()
-		}
-		// If it's a map, look up the key.
-		if vo, ok := currentValue.(valueObject); ok {
-			nextValue, exists := vo[part]
-			if !exists {
-				return mo.None[T]()
-			}
-			currentValue = nextValue
-			continue
-		}
-		// If it's a slice, look up the index.
-		val := reflect.ValueOf(currentValue)
-		if val.Kind() == reflect.Slice {
-			index, err := strconv.Atoi(part)
-			lo.Assertf(err == nil, "dvo: path part '%s' in '%s' is not a valid integer index for a slice", part, name)
-			lo.Assertf(index >= 0 && index < val.Len(), "dvo: array bound exceed: %v", val)
-			currentValue = val.Index(index).Interface()
-			continue
-		}
-		// If we are here, we are trying to traverse into a primitive from a non-final path segment.
-		return mo.None[T]()
-	}
-
-	typedValue, ok := currentValue.(T)
-	lo.Assertf(ok, "dvo: field '%s' has wrong type: expected %T, got %T", name, *new(T), currentValue)
-	return mo.Some(typedValue)
-}
-
 func (vo valueObject) StringArray(name string) mo.Option[[]string] {
-	return get[[]string](vo, name)
+	return internal.Get[[]string](vo.Data, name)
 }
-
 func (vo valueObject) MstStringArray(name string) []string {
 	return vo.StringArray(name).MustGet()
 }
-
 func (vo valueObject) IntArray(name string) mo.Option[[]int] {
-	return get[[]int](vo, name)
+	return internal.Get[[]int](vo.Data, name)
 }
-
 func (vo valueObject) MstIntArray(name string) []int {
 	return vo.IntArray(name).MustGet()
 }
-
 func (vo valueObject) Int64Array(name string) mo.Option[[]int64] {
-	return get[[]int64](vo, name)
+	return internal.Get[[]int64](vo.Data, name)
 }
-
 func (vo valueObject) MstInt64Array(name string) []int64 {
 	return vo.Int64Array(name).MustGet()
 }
-
 func (vo valueObject) Float64Array(name string) mo.Option[[]float64] {
-	return get[[]float64](vo, name)
+	return internal.Get[[]float64](vo.Data, name)
 }
-
 func (vo valueObject) MstFloat64Array(name string) []float64 {
 	return vo.Float64Array(name).MustGet()
 }
-
 func (vo valueObject) BoolArray(name string) mo.Option[[]bool] {
-	return get[[]bool](vo, name)
+	return internal.Get[[]bool](vo.Data, name)
 }
-
 func (vo valueObject) MstBoolArray(name string) []bool {
 	return vo.BoolArray(name).MustGet()
-}
-
-// String returns an Option containing the string value for the given name.
-// It panics if the field exists but is not a string.
-func (vo valueObject) String(name string) mo.Option[string] {
-	return get[string](vo, name)
-}
-
-// MstString returns the string value for the given name.
-// It panics if the key is not found or the value is not a string.
-func (vo valueObject) MstString(name string) string {
-	return vo.String(name).MustGet()
-}
-
-// Int returns an Option containing the int value for the given name.
-// It panics if the field exists but is not an int.
-func (vo valueObject) Int(name string) mo.Option[int] {
-	return get[int](vo, name)
-}
-
-// MstInt returns the int value for the given name.
-// It panics if the key is not found or the value is not an int.
-func (vo valueObject) MstInt(name string) int {
-	return vo.Int(name).MustGet()
-}
-
-// Int8 returns an Option containing the int8 value for the given name.
-// It panics if the field exists but is not an int8.
-func (vo valueObject) Int8(name string) mo.Option[int8] {
-	return get[int8](vo, name)
-}
-
-// MstInt8 returns the int8 value for the given name.
-// It panics if the key is not found or the value is not an int8.
-func (vo valueObject) MstInt8(name string) int8 {
-	return vo.Int8(name).MustGet()
-}
-
-// Int16 returns an Option containing the int16 value for the given name.
-// It panics if the field exists but is not an int16.
-func (vo valueObject) Int16(name string) mo.Option[int16] {
-	return get[int16](vo, name)
-}
-
-// MstInt16 returns the int16 value for the given name.
-// It panics if the key is not found or the value is not an int16.
-func (vo valueObject) MstInt16(name string) int16 {
-	return vo.Int16(name).MustGet()
-}
-
-// Int32 returns an Option containing the int32 value for the given name.
-// It panics if the field exists but is not an int32.
-func (vo valueObject) Int32(name string) mo.Option[int32] {
-	return get[int32](vo, name)
-}
-
-// MstInt32 returns the int32 value for the given name.
-// It panics if the key is not found or the value is not an int32.
-func (vo valueObject) MstInt32(name string) int32 {
-	return vo.Int32(name).MustGet()
-}
-
-// Int64 returns an Option containing the int64 value for the given name.
-// It panics if the field exists but is not an int64.
-func (vo valueObject) Int64(name string) mo.Option[int64] {
-	return get[int64](vo, name)
-}
-
-// MstInt64 returns the int64 value for the given name.
-// It panics if the key is not found or the value is not an int64.
-func (vo valueObject) MstInt64(name string) int64 {
-	return vo.Int64(name).MustGet()
-}
-
-// Uint returns an Option containing the uint value for the given name.
-// It panics if the field exists but is not a unit.
-func (vo valueObject) Uint(name string) mo.Option[uint] {
-	return get[uint](vo, name)
-}
-
-// MstUint returns the uint value for the given name.
-// It panics if the key is not found or the value is not a unit.
-func (vo valueObject) MstUint(name string) uint {
-	return vo.Uint(name).MustGet()
-}
-
-// Uint8 returns an Option containing the uint8 value for the given name.
-// It panics if the field exists but is not an unit8.
-func (vo valueObject) Uint8(name string) mo.Option[uint8] {
-	return get[uint8](vo, name)
-}
-
-// MstUint8 returns the uint8 value for the given name.
-// It panics if the key is not found or the value is not an unit8.
-func (vo valueObject) MstUint8(name string) uint8 {
-	return vo.Uint8(name).MustGet()
-}
-
-// Uint16 returns an Option containing the uint16 value for the given name.
-// It panics if the field exists but is not an unit16.
-func (vo valueObject) Uint16(name string) mo.Option[uint16] {
-	return get[uint16](vo, name)
-}
-
-// MstUint16 returns the uint16 value for the given name.
-// It panics if the key is not found or the value is not an unit16.
-func (vo valueObject) MstUint16(name string) uint16 {
-	return vo.Uint16(name).MustGet()
-}
-
-// Uint32 returns an Option containing the uint32 value for the given name.
-// It panics if the field exists but is not an unit32.
-func (vo valueObject) Uint32(name string) mo.Option[uint32] {
-	return get[uint32](vo, name)
-}
-
-// MstUint32 returns the uint32 value for the given name.
-// It panics if the key is not found or the value is not an unit32.
-func (vo valueObject) MstUint32(name string) uint32 {
-	return vo.Uint32(name).MustGet()
-}
-
-// Uint64 returns an Option containing the uint64 value for the given name.
-// It panics if the field exists but is not an unit64.
-func (vo valueObject) Uint64(name string) mo.Option[uint64] {
-	return get[uint64](vo, name)
-}
-
-// MstUint64 returns the uint64 value for the given name.
-// It panics if the key is not found or the value is not an unit64.
-func (vo valueObject) MstUint64(name string) uint64 {
-	return vo.Uint64(name).MustGet()
-}
-
-// Float64 Float returns an Option containing the float64 value for the given name.
-// It panics if the field exists but is not a float64.
-func (vo valueObject) Float64(name string) mo.Option[float64] {
-	return get[float64](vo, name)
-}
-
-// MstFloat64 returns the float64 value for the given name.
-// It panics if the key is not found or the value is not a float64.
-func (vo valueObject) MstFloat64(name string) float64 {
-	return vo.Float64(name).MustGet()
-}
-
-// Float32 returns an Option containing the float32 value for the given name.
-// It panics if the field exists but is not a float32.
-func (vo valueObject) Float32(name string) mo.Option[float32] {
-	return get[float32](vo, name)
-}
-
-// MstFloat32 returns the float32 value for the given name.
-// It panics if the key is not found or the value is not a float32.
-func (vo valueObject) MstFloat32(name string) float32 {
-	return vo.Float32(name).MustGet()
-}
-
-// Bool returns an Option containing the bool value for the given name.
-// It panics if the field exists but is not a bool.
-func (vo valueObject) Bool(name string) mo.Option[bool] {
-	return get[bool](vo, name)
-}
-
-// MstBool returns the bool value for the given name.
-// It panics if the key is not found or the value is not a bool.
-func (vo valueObject) MstBool(name string) bool {
-	return vo.Bool(name).MustGet()
-}
-
-// Time returns an Option containing the time.Time value for the given name.
-// It panics if the field exists but is not a time.Time.
-func (vo valueObject) Time(name string) mo.Option[time.Time] {
-	return get[time.Time](vo, name)
-}
-
-// MstTime returns the time.Time value for the given name.
-// It panics if the key is not found or the value is not a time.Time.
-func (vo valueObject) MstTime(name string) time.Time {
-	return vo.Time(name).MustGet()
 }
 
 func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result[ValueObject] {
 	if len(json) > 0 && !gjson.Valid(json) {
 		return mo.Err[ValueObject](fmt.Errorf("invalid json %s", json))
 	}
-	object := valueObject{}
+	object := internal.Data{}
 	errs := &validationError{}
 	// Check for unknown fields first if not allowed.
 	voFields := lo.SliceToMap(s.fields, func(field SchemaField) (string, bool) {
@@ -999,7 +655,25 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 			}
 			continue
 		}
-		object[field.Name()] = rs.MustGet()
+		// Store the validated value as-is. For embedded objects the validate()
+		// returns a ValueObject, so we keep it to preserve hierarchical access.
+		val := rs.MustGet()
+		// For single embedded objects, ensure we store a ValueObject implementation.
+		if field.IsObject() && !field.IsArray() {
+			switch v := val.(type) {
+			case internal.Data:
+				object[field.Name()] = valueObject{Data: v}
+			case valueObject, *valueObject:
+				object[field.Name()] = v
+			case ValueObject:
+				object[field.Name()] = v
+			default:
+				// fallback: store as-is
+				object[field.Name()] = val
+			}
+		} else {
+			object[field.Name()] = val
+		}
 	}
 
 	// Add unknown URL parameters to the final object if allowed.
@@ -1010,5 +684,20 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 			}
 		}
 	}
-	return lo.Ternary(errs.err() != nil, mo.Err[ValueObject](errs.err()), mo.Ok[ValueObject](object))
+	// DEBUG: inspect stored types for embedded fields (for development only)
+	if u, ok := object["user"]; ok {
+		switch v := u.(type) {
+		case valueObject:
+			fmt.Printf("DEBUG: object['user'] is valueObject (value) with fields: %v\n", v.Fields())
+		case *valueObject:
+			fmt.Printf("DEBUG: object['user'] is *valueObject with fields: %v\n", v.Fields())
+		case internal.Data:
+			fmt.Printf("DEBUG: object['user'] is internal.Data with keys: %v\n", v.Fields())
+		default:
+			fmt.Printf("DEBUG: object['user'] is %T\n", v)
+		}
+	}
+	return lo.Ternary(errs.err() != nil, mo.Err[ValueObject](errs.err()), mo.Ok[ValueObject](valueObject{
+		Data: object,
+	}))
 }

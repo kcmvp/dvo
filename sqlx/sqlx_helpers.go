@@ -144,7 +144,7 @@ func selectSQL[T entity.Entity](schema *dvo.Schema, where Where) (string, []any,
 	return sqlStr + " WHERE " + clause, args, nil
 }
 
-func updateSQL[T entity.Entity](schema dvo.Schema, g dvo.ValueObject, where Where) (string, []any, error) {
+func updateSQL[T entity.Entity](schema dvo.Schema, g ValueObject, where Where) (string, []any, error) {
 	if schema == nil || len(schema) == 0 {
 		return "", nil, fmt.Errorf("schema is required")
 	}
@@ -206,7 +206,7 @@ func updateSQL[T entity.Entity](schema dvo.Schema, g dvo.ValueObject, where Wher
 //   - Otherwise, the ValueObject's Fields() (excluding the special key) are
 //     used as the list of fields to update; these names are converted to
 //     snake_case for DB column names.
-func updateSQLFromValues[T entity.Entity](g dvo.ValueObject, where Where) (string, []any, error) {
+func updateSQLFromValues[T entity.Entity](g ValueObject, where Where) (string, []any, error) {
 	if where == nil {
 		return "", nil, fmt.Errorf("where is required")
 	}
@@ -419,7 +419,7 @@ func buildExistsWhere(joinstmt string, where Where) (Where, error) {
 // Mapping policy:
 // - Fields are schema field Name() (provider name).
 // - Values are scanned as driver values.
-func rowsToValueObjects(rows *sql.Rows, schema dvo.Schema) ([]dvo.ValueObject, error) {
+func rowsToValueObjects(rows *sql.Rows, schema dvo.Schema) ([]ValueObject, error) {
 	if rows == nil {
 		return nil, fmt.Errorf("rows is required")
 	}
@@ -429,7 +429,7 @@ func rowsToValueObjects(rows *sql.Rows, schema dvo.Schema) ([]dvo.ValueObject, e
 
 	// We always project columns in the same order as schema in selectSQL.
 	n := len(schema)
-	out := make([]dvo.ValueObject, 0)
+	out := make([]ValueObject, 0)
 
 	for rows.Next() {
 		vals := make([]any, n)
@@ -445,7 +445,7 @@ func rowsToValueObjects(rows *sql.Rows, schema dvo.Schema) ([]dvo.ValueObject, e
 		for i, f := range schema {
 			m[f.Name()] = vals[i]
 		}
-		out = append(out, dvo.NewValueObject(m))
+		out = append(out, valueObject{Data: m})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -462,25 +462,25 @@ type queryExec[T entity.Entity] struct {
 	where  Where
 }
 
-func (q queryExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error) {
+func (q queryExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error) {
 	if ds == nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), fmt.Errorf("db is required")
+		return mo.Left[[]ValueObject, sql.Result](nil), fmt.Errorf("db is required")
 	}
 	query, qargs, err := selectSQL[T](&q.schema, q.where)
 	if err != nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Left[[]ValueObject, sql.Result](nil), err
 	}
 	rows, err := ds.QueryContext(ctx, query, qargs...)
 	if err != nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Left[[]ValueObject, sql.Result](nil), err
 	}
 	defer func() { _ = rows.Close() }()
 
 	res, err := rowsToValueObjects(rows, q.schema)
 	if err != nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Left[[]ValueObject, sql.Result](nil), err
 	}
-	return mo.Left[[]dvo.ValueObject, sql.Result](res), nil
+	return mo.Left[[]ValueObject, sql.Result](res), nil
 }
 
 func (q queryExec[T]) sql() (string, error) {
@@ -496,19 +496,19 @@ type deleteExec[T entity.Entity] struct {
 	where Where
 }
 
-func (d deleteExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error) {
+func (d deleteExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error) {
 	if ds == nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), fmt.Errorf("db is required")
+		return mo.Right[[]ValueObject, sql.Result](nil), fmt.Errorf("db is required")
 	}
 	query, qargs, err := deleteSQL[T](d.where)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
 	result, err := ds.ExecContext(ctx, query, qargs...)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
-	return mo.Right[[]dvo.ValueObject, sql.Result](result), nil
+	return mo.Right[[]ValueObject, sql.Result](result), nil
 }
 
 func (d deleteExec[T]) sql() (string, error) {
@@ -521,23 +521,23 @@ func (d deleteExec[T]) sql() (string, error) {
 // -----------------------------
 
 type updateExec[T entity.Entity] struct {
-	values dvo.ValueObject
+	values ValueObject
 	where  Where
 }
 
-func (u updateExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error) {
+func (u updateExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error) {
 	if ds == nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), fmt.Errorf("db is required")
+		return mo.Right[[]ValueObject, sql.Result](nil), fmt.Errorf("db is required")
 	}
 	q, args, err := updateSQLFromValues[T](u.values, u.where)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
 	res, err := ds.ExecContext(ctx, q, args...)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
-	return mo.Right[[]dvo.ValueObject, sql.Result](res), nil
+	return mo.Right[[]ValueObject, sql.Result](res), nil
 }
 
 func (u updateExec[T]) sql() (string, error) {
@@ -555,24 +555,24 @@ type joinQueryExec struct {
 	where    Where
 }
 
-func (j joinQueryExec) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error) {
+func (j joinQueryExec) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error) {
 	if ds == nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), fmt.Errorf("db is required")
+		return mo.Left[[]ValueObject, sql.Result](nil), fmt.Errorf("db is required")
 	}
 	q, args, err := buildSelectWithJoin(j.schema, j.joinstmt, j.where)
 	if err != nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Left[[]ValueObject, sql.Result](nil), err
 	}
 	rows, err := ds.QueryContext(ctx, q, args...)
 	if err != nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Left[[]ValueObject, sql.Result](nil), err
 	}
 	defer func() { _ = rows.Close() }()
 	res, err := rowsToValueObjects(rows, j.schema)
 	if err != nil {
-		return mo.Left[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Left[[]ValueObject, sql.Result](nil), err
 	}
-	return mo.Left[[]dvo.ValueObject, sql.Result](res), nil
+	return mo.Left[[]ValueObject, sql.Result](res), nil
 }
 
 func (j joinQueryExec) sql() (string, error) {
@@ -587,19 +587,19 @@ type joinDeleteExec struct {
 	where     Where
 }
 
-func (j joinDeleteExec) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error) {
+func (j joinDeleteExec) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error) {
 	if ds == nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), fmt.Errorf("db is required")
+		return mo.Right[[]ValueObject, sql.Result](nil), fmt.Errorf("db is required")
 	}
 	q, args, err := buildDeleteWithJoin(j.baseTable, j.joinstmt, j.where)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
 	res, err := ds.ExecContext(ctx, q, args...)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
-	return mo.Right[[]dvo.ValueObject, sql.Result](res), nil
+	return mo.Right[[]ValueObject, sql.Result](res), nil
 }
 
 func (j joinDeleteExec) sql() (string, error) {
@@ -609,29 +609,29 @@ func (j joinDeleteExec) sql() (string, error) {
 
 // updateJoinExec implements update with join-based EXISTS filter.
 type updateJoinExec[T entity.Entity] struct {
-	values   dvo.ValueObject
+	values   ValueObject
 	joinstmt string
 	where    Where
 }
 
-func (u updateJoinExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]dvo.ValueObject, sql.Result], error) {
+func (u updateJoinExec[T]) Execute(ctx context.Context, ds *sql.DB) (mo.Either[[]ValueObject, sql.Result], error) {
 	if ds == nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), fmt.Errorf("db is required")
+		return mo.Right[[]ValueObject, sql.Result](nil), fmt.Errorf("db is required")
 	}
 	// build a Where representing the EXISTS(...) predicate (applies joinstmt and inner where)
 	existsWhere, err := buildExistsWhere(u.joinstmt, u.where)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
 	q, args, err := updateSQLFromValues[T](u.values, existsWhere)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
 	res, err := ds.ExecContext(ctx, q, args...)
 	if err != nil {
-		return mo.Right[[]dvo.ValueObject, sql.Result](nil), err
+		return mo.Right[[]ValueObject, sql.Result](nil), err
 	}
-	return mo.Right[[]dvo.ValueObject, sql.Result](res), nil
+	return mo.Right[[]ValueObject, sql.Result](res), nil
 }
 
 func (u updateJoinExec[T]) sql() (string, error) {
