@@ -1,11 +1,11 @@
 {
-  "ID": "xql.NewField[Account, int64](\"ID\", \"id\", \"ID\")",
-  "Email": "xql.NewField[Account, string](\"Email\", \"email\", \"Email\")",
-  "Nickname": "xql.NewField[Account, string](\"Nickname\", \"nick_name\", \"Nickname\")",
-  "Category": "xql.NewField[Account, int64](\"Category\", \"category\", \"Category\")",
-  "Balance": "xql.NewField[Account, float64](\"Balance\", \"balance\", \"Balance\")",
-  "CreatedAt": "xql.NewField[Account, time.Time](\"CreatedAt\", \"created_at\", \"CreatedAt\")",
-  "UpdatedAt": "xql.NewField[Account, time.Time](\"UpdatedAt\", \"updated_at\", \"UpdatedAt\")",
-  "CreatedBy": "xql.NewField[Account, string](\"CreatedBy\", \"created_by\", \"CreatedBy\")",
-  "UpdatedBy": "xql.NewField[Account, string](\"UpdatedBy\", \"updated_by\", \"UpdatedBy\")"
+  "ID": "xql.NewField[Account, int64](\"id\", \"ID\")",
+  "Email": "xql.NewField[Account, string](\"email\", \"Email\")",
+  "Nickname": "xql.NewField[Account, string](\"nick_name\", \"Nickname\")",
+  "Category": "xql.NewField[Account, int64](\"category\", \"Category\")",
+  "Balance": "xql.NewField[Account, float64](\"balance\", \"Balance\")",
+  "CreatedAt": "xql.NewField[Account, time.Time](\"created_at\", \"CreatedAt\")",
+  "UpdatedAt": "xql.NewField[Account, time.Time](\"updated_at\", \"UpdatedAt\")",
+  "CreatedBy": "xql.NewField[Account, string](\"created_by\", \"CreatedBy\")",
+  "UpdatedBy": "xql.NewField[Account, string](\"updated_by\", \"UpdatedBy\")"
 }
