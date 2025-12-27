@@ -1,0 +1,9 @@
+{
+  "ID": "dvo.NewField[Order, int64](\"ID\", \"id\", \"ID\")",
+  "AccountID": "dvo.NewField[Order, int64](\"AccountID\", \"account_id\", \"AccountID\")",
+  "Amount": "dvo.NewField[Order, float64](\"Amount\", \"amount\", \"Amount\")",
+  "CreatedAt": "dvo.NewField[Order, time.Time](\"CreatedAt\", \"created_at\", \"CreatedAt\")",
+  "UpdatedAt": "dvo.NewField[Order, time.Time](\"UpdatedAt\", \"updated_at\", \"UpdatedAt\")",
+  "CreatedBy": "dvo.NewField[Order, string](\"CreatedBy\", \"created_by\", \"CreatedBy\")",
+  "UpdatedBy": "dvo.NewField[Order, string](\"UpdatedBy\", \"updated_by\", \"UpdatedBy\")"
+}

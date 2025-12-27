@@ -1,0 +1,23 @@
+{
+  "id": "req-789",
+  "user": {
+    "name": "Deep Validator",
+    "email": "deep.validator@example.com"
+  },
+  "tags": ["go", "dvo", "nested", "testing"],
+  "items": [
+    {
+      "id": 101,
+      "name": "Component A",
+      "supplier": {
+        "id": "SUP-A",
+        "name": "Supplier Alpha"
+      }
+    }
+  ],
+  "string_array": ["a", "b", "c"],
+  "int_array": [1, 2, 3],
+  "int64_array": [10, 20, 30],
+  "float64_array": [1.1, 2.2, 3.3],
+  "bool_array": [true, false, true]
+}
