@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kcmvp/dvo"
 	"github.com/kcmvp/dvo/internal"
 	"github.com/kcmvp/dvo/validator"
 	"github.com/samber/lo"
@@ -64,9 +65,12 @@ func (e *validationError) err() error {
 	return e
 }
 
-// SchemaField is an internal, non-generic interface that allows Schema
+// ViewField is an internal, non-generic interface that allows Schema
 // to hold a collection of fields with different underlying generic types.
-type SchemaField interface {
+//
+// This is intentionally view-layer specific (validation/parsing behavior) and
+// must not be confused with `dvo.Field`, which is persistence metadata.
+type ViewField interface {
 	Name() string
 	IsArray() bool
 	IsObject() bool
@@ -85,7 +89,7 @@ type JSONField[T validator.FieldType] struct {
 	validators []validator.Validator[T]
 }
 
-func (f *JSONField[T]) AsSchemaField() SchemaField {
+func (f *JSONField[T]) AsSchemaField() ViewField {
 	return f
 }
 
@@ -108,7 +112,7 @@ func (f *JSONField[T]) embeddedObject() mo.Option[*Schema] {
 	return lo.Ternary(f.embedded == nil, mo.None[*Schema](), mo.Some(f.embedded))
 }
 
-var _ SchemaField = (*JSONField[string])(nil)
+var _ ViewField = (*JSONField[string])(nil)
 var _ FieldProvider = (*JSONField[string])(nil)
 
 func (f *JSONField[T]) Name() string {
@@ -353,11 +357,11 @@ func overflowError[T any](v T) error {
 	return validator.OverflowError(v)
 }
 
-// FieldProvider is an interface for any type that can provide a SchemaField.
+// FieldProvider is an interface for any type that can provide a ViewField.
 // It's used to create a type-safe and unified API for WithFields.
 // The unexported seal() method makes this interface non-implementable by external packages.
 type FieldProvider interface {
-	AsSchemaField() SchemaField
+	AsSchemaField() ViewField
 	seal()
 }
 
@@ -420,14 +424,14 @@ func trait[T validator.FieldType](name string, isArray, isObject bool, nested *S
 
 // Schema is a blueprint for validating a raw object.
 type Schema struct {
-	fields             []SchemaField
+	fields             []ViewField
 	allowUnknownFields bool
 }
 
 // WithFields is the new constructor for a Schema blueprint that accepts FieldProvider.
 // This allows for a more fluent and type-safe API.
 func WithFields(providers ...FieldProvider) *Schema {
-	fields := make([]SchemaField, len(providers))
+	fields := make([]ViewField, len(providers))
 	for i, p := range providers {
 		fields[i] = p.AsSchemaField()
 	}
@@ -441,8 +445,8 @@ func WithFields(providers ...FieldProvider) *Schema {
 	return &Schema{fields: fields, allowUnknownFields: false}
 }
 
-// AllowUnknownFields is a fluent method to make the Schema accept raw
-// that contains fields not defined in the schema. Default behavior is to disallow.
+// AllowUnknownFields is a fluent method to make the Schema accept JSON/url params
+// that contain fields not defined in the schema. Default behavior is to disallow.
 func (s *Schema) AllowUnknownFields() *Schema {
 	s.allowUnknownFields = true
 	return s
@@ -450,7 +454,7 @@ func (s *Schema) AllowUnknownFields() *Schema {
 
 func (s *Schema) Extend(another *Schema) *Schema {
 	// 1. Create a new field slice with enough capacity.
-	newFields := make([]SchemaField, 0, len(s.fields)+len(another.fields))
+	newFields := make([]ViewField, 0, len(s.fields)+len(another.fields))
 
 	// 2. Copy fields from both Schemas.
 	newFields = append(newFields, s.fields...)
@@ -587,7 +591,7 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 	object := internal.Data{}
 	errs := &validationError{}
 	// Check for unknown fields first if not allowed.
-	voFields := lo.SliceToMap(s.fields, func(field SchemaField) (string, bool) {
+	voFields := lo.SliceToMap(s.fields, func(field ViewField) (string, bool) {
 		return field.Name(), field.IsArray() || field.IsObject()
 	})
 	urlPair := map[string]string{}
@@ -701,3 +705,24 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 		Data: object,
 	}))
 }
+
+// PersistentViewField builds a typed JSONField[T] directly from a
+// `dvo.PersistentField[T]`. This is the preferred API when you have access
+// to the generator-produced typed persistent field variable because it
+// enforces the type parameter at compile time and avoids runtime mismatches.
+func PersistentViewField[T validator.FieldType](pf dvo.PersistentField[T], vfs ...validator.ValidateFunc[T]) *JSONField[T] {
+	return trait[T](pf.ViewName(), false, false, nil, vfs...)
+}
+
+// PersistentArrayField builds a typed JSONField[T] for a JSON array from a
+// pure meta `dvo.Field` (generator-produced). The caller provides the element
+// type parameter T so the returned JSONField expects an array of T.
+// This avoids requiring the meta to be parameterized as `PersistentField[[]T]`.
+func PersistentArrayField[T validator.FieldType](f dvo.Field, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
+	return trait[T](f.ViewName(), true, false, nil, vfs...)
+}
+
+// Note: for array-of-objects and nested object cases, the generator should
+// also emit nested schema metadata; those helpers can be added once the
+// generator provides the nested grouping. For now this helper supports
+// arrays of primitive/typed elements.

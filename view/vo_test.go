@@ -209,7 +209,7 @@ func TestJSONField_validateRaw(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
 		name                string
-		field               SchemaField
+		field               ViewField
 		input               string
 		wantValue           any
 		wantErr             error
@@ -894,7 +894,7 @@ func TestValidationError_err(t *testing.T) {
 func TestSchemaField_validate(t *testing.T) {
 	tests := []struct {
 		name      string
-		field     SchemaField
+		field     ViewField
 		json      string
 		wantValue any
 		wantErr   error

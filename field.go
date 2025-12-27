@@ -125,4 +125,4 @@ func NewField[E entity.Entity, T FieldType](name string, column string, view str
 // an entity. The generator produces Schema values and the runtime code
 // (SQL builders, view validators) consumes them. Keep Schema small and
 // prefer generator-emitted Schemas to ad-hoc reflection at runtime.
-type Schema []Field
+//type Schema []Field

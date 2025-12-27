@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kcmvp/dvo"
 	. "github.com/kcmvp/dvo/sample/entity"
 	"github.com/kcmvp/dvo/sample/gen/field/order"
 	"github.com/stretchr/testify/require"
@@ -417,7 +416,7 @@ func TestSqlGeneration_Delete(t *testing.T) {
 // TestSqlGeneration_Update mirrors the Select/Delete tests but for UPDATE statements.
 func TestSqlGeneration_Update(t *testing.T) {
 	fields := order.All()
-	schema := dvo.Schema(fields)
+	schema := Schema(fields)
 
 	cases := []struct {
 		name    string
@@ -526,7 +525,7 @@ func TestSqlGeneration_Update(t *testing.T) {
 func TestJoinAPIs_SQLGeneration(t *testing.T) {
 	// prepare schema for Order and pass it explicitly
 	fields := order.All()
-	schema := dvo.Schema(fields)
+	schema := Schema(fields)
 
 	join := "JOIN profiles ON profiles.account_id = orders.account_id"
 

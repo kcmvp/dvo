@@ -48,6 +48,8 @@ type Where interface {
 	Build() (string, []any)
 }
 
+type Schema []dvo.Field
+
 // --- Where DSL helpers (public) ---
 
 // And combines multiple Where conditions with the AND operator.
@@ -137,7 +139,7 @@ type Executor interface {
 //	// run
 //	resEither, err := exec.Execute(ctx, db)
 //	// check left/right and handle accordingly
-func Query[T entity.Entity](schema dvo.Schema) func(where Where) Executor {
+func Query[T entity.Entity](schema Schema) func(where Where) Executor {
 	return func(where Where) Executor {
 		return queryExec[T]{schema: schema, where: where}
 	}
@@ -165,7 +167,7 @@ func Update[T entity.Entity](values ValueObject) func(where Where) Executor {
 
 // QueryJoin builds a select executor that injects `joinstmt` into the FROM
 // clause. The returned Executor follows the existing `Executor` contract.
-func QueryJoin(schema dvo.Schema) func(joinstmt string, where Where) Executor {
+func QueryJoin(schema Schema) func(joinstmt string, where Where) Executor {
 	return func(joinstmt string, where Where) Executor {
 		return joinQueryExec{schema: schema, joinstmt: joinstmt, where: where}
 	}

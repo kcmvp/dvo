@@ -106,7 +106,7 @@ func inWhere(field dvo.Field, values ...any) Where {
 	return whereFunc(func() (string, []any) { return clause, values })
 }
 
-func selectSQL[T entity.Entity](schema *dvo.Schema, where Where) (string, []any, error) {
+func selectSQL[T entity.Entity](schema *Schema, where Where) (string, []any, error) {
 	if schema == nil {
 		return "", nil, fmt.Errorf("schema is required")
 	}
@@ -144,7 +144,7 @@ func selectSQL[T entity.Entity](schema *dvo.Schema, where Where) (string, []any,
 	return sqlStr + " WHERE " + clause, args, nil
 }
 
-func updateSQL[T entity.Entity](schema dvo.Schema, g ValueObject, where Where) (string, []any, error) {
+func updateSQL[T entity.Entity](schema Schema, g ValueObject, where Where) (string, []any, error) {
 	if schema == nil || len(schema) == 0 {
 		return "", nil, fmt.Errorf("schema is required")
 	}
@@ -228,18 +228,18 @@ func updateSQLFromValues[T entity.Entity](g ValueObject, where Where) (string, [
 	args := make([]any, 0)
 
 	// Try to obtain schema from values
-	var schema dvo.Schema
+	var schema Schema
 	if sOpt := g.Get("__schema"); !sOpt.IsAbsent() {
 		v := sOpt.MustGet()
 		// accept meta.Schema or []meta.Field
 		switch sv := v.(type) {
-		case dvo.Schema:
+		case Schema:
 			schema = sv
 		case []dvo.Field:
-			schema = dvo.Schema(sv)
+			schema = Schema(sv)
 		case *[]dvo.Field:
-			schema = dvo.Schema(*sv)
-		case *dvo.Schema:
+			schema = Schema(*sv)
+		case *Schema:
 			schema = *sv
 		default:
 			// ignore and fallback to Fields()
@@ -299,7 +299,7 @@ func deleteSQL[T entity.Entity](where Where) (string, []any, error) {
 	return fmt.Sprintf("DELETE FROM %s WHERE %s", table, clause), args, nil
 }
 
-func buildSelectWithJoin(schema dvo.Schema, joinstmt string, where Where) (string, []any, error) {
+func buildSelectWithJoin(schema Schema, joinstmt string, where Where) (string, []any, error) {
 	if schema == nil || len(schema) == 0 {
 		return "", nil, fmt.Errorf("schema is required and must contain at least one field")
 	}
@@ -419,7 +419,7 @@ func buildExistsWhere(joinstmt string, where Where) (Where, error) {
 // Mapping policy:
 // - Fields are schema field Name() (provider name).
 // - Values are scanned as driver values.
-func rowsToValueObjects(rows *sql.Rows, schema dvo.Schema) ([]ValueObject, error) {
+func rowsToValueObjects(rows *sql.Rows, schema Schema) ([]ValueObject, error) {
 	if rows == nil {
 		return nil, fmt.Errorf("rows is required")
 	}
@@ -458,7 +458,7 @@ func rowsToValueObjects(rows *sql.Rows, schema dvo.Schema) ([]ValueObject, error
 // -----------------------------
 
 type queryExec[T entity.Entity] struct {
-	schema dvo.Schema
+	schema Schema
 	where  Where
 }
 
@@ -550,7 +550,7 @@ func (u updateExec[T]) sql() (string, error) {
 // -----------------------------
 
 type joinQueryExec struct {
-	schema   dvo.Schema
+	schema   Schema
 	joinstmt string
 	where    Where
 }
