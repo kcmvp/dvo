@@ -48,7 +48,7 @@ type Where interface {
 	Build() (string, []any)
 }
 
-type Schema []dvo.Field
+type Schema []xql.Field
 
 // --- Where DSL helpers (public) ---
 
@@ -65,43 +65,43 @@ func Or(wheres ...Where) Where {
 }
 
 // Eq builds a "field = ?" predicate.
-func Eq(field dvo.Field, value any) Where {
+func Eq(field xql.Field, value any) Where {
 	return op(field, "=", value)
 }
 
 // Ne builds a "field != ?" predicate.
-func Ne(field dvo.Field, value any) Where {
+func Ne(field xql.Field, value any) Where {
 	return op(field, "!=", value)
 }
 
 // Gt builds a "field > ?" predicate.
-func Gt(field dvo.Field, value any) Where {
+func Gt(field xql.Field, value any) Where {
 	return op(field, ">", value)
 }
 
 // Gte builds a "field >= ?" predicate.
-func Gte(field dvo.Field, value any) Where {
+func Gte(field xql.Field, value any) Where {
 	return op(field, ">=", value)
 }
 
 // Lt builds a "field < ?" predicate.
-func Lt(field dvo.Field, value any) Where {
+func Lt(field xql.Field, value any) Where {
 	return op(field, "<", value)
 }
 
 // Lte builds a "field <= ?" predicate.
-func Lte(field dvo.Field, value any) Where {
+func Lte(field xql.Field, value any) Where {
 	return op(field, "<=", value)
 }
 
 // Like builds a "field LIKE ?" predicate.
-func Like(field dvo.Field, value string) Where {
+func Like(field xql.Field, value string) Where {
 	return op(field, "LIKE", value)
 }
 
 // In builds a "field IN (?, ?, ...)" predicate.
 // Empty values produce an always-false clause (1=0).
-func In(field dvo.Field, values ...any) Where {
+func In(field xql.Field, values ...any) Where {
 	return inWhere(field, values...)
 }
 

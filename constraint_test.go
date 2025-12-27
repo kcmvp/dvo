@@ -1,4 +1,4 @@
-package dvo
+package xql
 
 import (
 	"testing"

@@ -688,41 +688,23 @@ func (s *Schema) Validate(json string, urlParams ...map[string]string) mo.Result
 			}
 		}
 	}
-	// DEBUG: inspect stored types for embedded fields (for development only)
-	if u, ok := object["user"]; ok {
-		switch v := u.(type) {
-		case valueObject:
-			fmt.Printf("DEBUG: object['user'] is valueObject (value) with fields: %v\n", v.Fields())
-		case *valueObject:
-			fmt.Printf("DEBUG: object['user'] is *valueObject with fields: %v\n", v.Fields())
-		case internal.Data:
-			fmt.Printf("DEBUG: object['user'] is internal.Data with keys: %v\n", v.Fields())
-		default:
-			fmt.Printf("DEBUG: object['user'] is %T\n", v)
-		}
-	}
 	return lo.Ternary(errs.err() != nil, mo.Err[ValueObject](errs.err()), mo.Ok[ValueObject](valueObject{
 		Data: object,
 	}))
 }
 
 // PersistentViewField builds a typed JSONField[T] directly from a
-// `dvo.PersistentField[T]`. This is the preferred API when you have access
+// `xql.PersistentField[T]`. This is the preferred API when you have access
 // to the generator-produced typed persistent field variable because it
 // enforces the type parameter at compile time and avoids runtime mismatches.
-func PersistentViewField[T validator.FieldType](pf dvo.PersistentField[T], vfs ...validator.ValidateFunc[T]) *JSONField[T] {
+func PersistentViewField[T validator.FieldType](pf xql.PersistentField[T], vfs ...validator.ValidateFunc[T]) *JSONField[T] {
 	return trait[T](pf.ViewName(), false, false, nil, vfs...)
 }
 
 // PersistentArrayField builds a typed JSONField[T] for a JSON array from a
-// pure meta `dvo.Field` (generator-produced). The caller provides the element
+// pure meta `xql.Field` (generator-produced). The caller provides the element
 // type parameter T so the returned JSONField expects an array of T.
 // This avoids requiring the meta to be parameterized as `PersistentField[[]T]`.
-func PersistentArrayField[T validator.FieldType](f dvo.Field, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
+func PersistentArrayField[T validator.FieldType](f xql.Field, vfs ...validator.ValidateFunc[T]) *JSONField[T] {
 	return trait[T](f.ViewName(), true, false, nil, vfs...)
 }
-
-// Note: for array-of-objects and nested object cases, the generator should
-// also emit nested schema metadata; those helpers can be added once the
-// generator provides the nested grouping. For now this helper supports
-// arrays of primitive/typed elements.

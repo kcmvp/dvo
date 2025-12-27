@@ -1,4 +1,4 @@
-package dvo
+package xql
 
 import (
 	"fmt"
@@ -8,21 +8,34 @@ import (
 	"github.com/samber/lo"
 )
 
-// Package meta provides a minimal, stable metadata representation for
-// entity fields used by the generator, SQL layer and view layer.
+// Package dvo provides a compact, stable representation of entity field
+// metadata used by code generation, SQL builders and view/JSON validation.
 //
-// The package is intentionally small: it describes the identity of fields
-// (provider name, DB-qualified column, and view/JSON name) and supplies a
-// tiny factory helper `NewField` that derives the table name from the
-// concrete entity type. Validation logic may be attached to fields via
-// validator factories but validators are considered a higher-level concern
-// (often bound by the `view` package in runtime scenarios).
+// Key goals:
+//  - Keep the metadata model small and deterministic so generated Schemas
+//    are easy to inspect and consume at runtime.
+//  - Expose only a read-only API for field descriptors. Concrete
+//    implementations are sealed to this module to avoid accidental
+//    third-party implementations that break expectations.
+//  - Provide a tiny factory helper `NewField` that derives the DB table
+//    name from a concrete entity type (via `entity.Entity`) and validates
+//    basic invariants early.
+//
+// Typical usage (generator-emitted code):
+//
+//   var ID = NewField[Account, int64]("ID", "id", "id")
+//   // Schema values are slices of Field produced by generator code.
+//
+// Notes on layering:
+//  - Validator factories (`ValidateFunc`) may be attached to fields by the
+//    generator for convenience. In strict layering designs validators can
+//    be owned by the `view` package at runtime.
 
 // Field is a sealed interface describing a single field's metadata.
 //
 // Implementations provide three read-only accessors:
 //   - Name(): the canonical provider name (usually the exported Go field name)
-//   - Qualified(): the DB-qualified column name in the form "table.column"
+//   - QualifiedName(): the DB-qualified column name in the form "table.column"
 //   - ViewName(): the JSON/view facing name (the key used in validated objects)
 //
 // The unexported seal() method prevents external packages from
@@ -43,36 +56,28 @@ type Field interface {
 	seal()
 }
 
+// Number is a type constraint for numeric native Go types.
 type Number interface {
-	uint | uint8 | uint16 | uint32 | uint64 | int | int8 | int16 | int32 | int64 | float32 | float64
+	uint | uint8 | uint16 | uint32 | uint64 |
+		int | int8 | int16 | int32 | int64 |
+		float32 | float64
 }
 
-// FieldType is a constraint for the actual Go types we want to validate.
+// FieldType is a constraint for the concrete Go types that fields may
+// carry as type hints for validators and code generation.
 type FieldType interface {
 	Number | string | time.Time | bool
 }
 
-// PersistentField is a generic alias indicating this Field carries a
-// Go type parameter used for validators or type hints. It currently does
-// not add methods beyond Field but documents the intended semantic role.
+// PersistentField is a semantic alias: a Field that carries a Go type
+// parameter to enable type-safe validator factories or codegen hints.
 type PersistentField[E FieldType] interface {
 	Field
 }
 
-// persistentField is the concrete implementation of PersistentField.
-// It is intentionally a simple, immutable value object holding:
-//   - table: owning table name
-//   - name: provider name (Go exported field name)
-//   - column: DB column name
-//   - viewName: JSON key name used by the view layer
-//   - vfs: optional validator factory functions associated with the field
-//
-// Notes:
-//   - The vfs slice is provided for convenience so generator code may
-//     attach validator factories. If you adopt a strict layering rule
-//     (validators belong to `view`), you may choose to omit or ignore vfs.
-//   - persistentField is immutable after construction; callers should not
-//     mutate its fields.
+// persistentField is the internal, immutable implementation of
+// PersistentField. The fields are all unexported; instances are produced
+// using `NewField`.
 type persistentField[E FieldType] struct {
 	table    string
 	name     string
@@ -81,30 +86,39 @@ type persistentField[E FieldType] struct {
 	vfs      []ValidateFunc[E]
 }
 
-// Name returns the provider identifier.
-func (f persistentField[E]) Name() string {
-	return f.name
-}
+// Name returns the provider identifier (usually the Go exported field name).
+func (f persistentField[E]) Name() string { return f.name }
 
 // ViewName returns the JSON/view-facing key associated with this field.
-func (f persistentField[E]) ViewName() string {
-	return f.viewName
-}
+func (f persistentField[E]) ViewName() string { return f.viewName }
 
-// seal implements the sealed interface marker to prevent third-party
-// implementations of Field.
+// seal implements the package-only sealing marker.
 func (f persistentField[E]) seal() {}
 
-// QualifiedName returns the DB-qualified column name in the form "table.column".
-// This is the canonical format used across SQL generation and token
-// rewriting logic.
+// QualifiedName returns the DB-qualified column name in the canonical
+// "table.column" format used by SQL builders and token rewriting.
 func (f persistentField[E]) QualifiedName() string {
 	return fmt.Sprintf("%s.%s", f.table, f.column)
 }
 
 var _ PersistentField[int64] = (*persistentField[int64])(nil)
 
-// var f = NewField[Account, int64]("ID", "id", "id")
+// NewField creates a PersistentField for entity type E with Go type hint T.
+//
+// Parameters:
+//   - name: provider identifier (Go field name). Must be non-empty.
+//   - column: DB column name. Must be non-empty.
+//   - view: JSON/view key name. Must be non-empty.
+//   - vfs: optional validator factory functions for the field.
+//
+// Behavior:
+//   - The table name is derived by instantiating a zero value of E and
+//     calling its Table() method. The function asserts the table and the
+//     provided strings are non-empty using `lo.Assert`.
+//
+// Example:
+//
+//	var ID = NewField[Account, int64]("ID", "id", "id")
 func NewField[E entity.Entity, T FieldType](name string, column string, view string, vfs ...ValidateFunc[T]) PersistentField[T] {
 	var e E
 	table := e.Table()
@@ -120,9 +134,3 @@ func NewField[E entity.Entity, T FieldType](name string, column string, view str
 		vfs:      vfs,
 	}
 }
-
-// Schema is a minimal container: an ordered list of Field descriptors for
-// an entity. The generator produces Schema values and the runtime code
-// (SQL builders, view validators) consumes them. Keep Schema small and
-// prefer generator-emitted Schemas to ad-hoc reflection at runtime.
-//type Schema []Field
