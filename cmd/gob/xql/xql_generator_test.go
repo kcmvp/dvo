@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kcmvp/dvo/cmd/internal"
+	"github.com/kcmvp/xql/cmd/internal"
 	"github.com/stretchr/testify/require"
 )
 

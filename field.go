@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kcmvp/dvo/entity"
+	"github.com/kcmvp/xql/entity"
 	"github.com/samber/lo"
 )
 

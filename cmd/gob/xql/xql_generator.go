@@ -18,7 +18,7 @@ import (
 
 	_ "embed"
 
-	"github.com/kcmvp/dvo/cmd/internal"
+	"github.com/kcmvp/xql/cmd/internal"
 	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 	"golang.org/x/tools/go/packages"

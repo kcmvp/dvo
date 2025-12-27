@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/kcmvp/dvo/sample/entity"
-	"github.com/kcmvp/dvo/sample/gen/field/order"
+	. "github.com/kcmvp/xql/sample/entity"
+	"github.com/kcmvp/xql/sample/gen/field/order"
 	"github.com/stretchr/testify/require"
 )
 

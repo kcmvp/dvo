@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/internal"
-	"github.com/kcmvp/dvo/validator"
+	"github.com/kcmvp/xql"
+	"github.com/kcmvp/xql/internal"
+	"github.com/kcmvp/xql/validator"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/tidwall/gjson"

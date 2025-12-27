@@ -136,14 +136,14 @@ func (p *Project) DependsOn(deps ...string) mo.Option[[]string] {
 }
 
 // ToolModulePath returns the current tool's module path inferred at runtime.
-// Falls back to "github.com/kcmvp/dvo" if build info is unavailable.
+// Falls back to "github.com/kcmvp/xql" if build info is unavailable.
 func ToolModulePath() string {
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		if bi.Main.Path != "" {
 			return bi.Main.Path
 		}
 	}
-	return "github.com/kcmvp/dvo"
+	return "github.com/kcmvp/xql"
 }
 
 // DependsOnTool reports whether the project depends on this tool's module path.
@@ -155,7 +155,7 @@ func (p *Project) DependsOnTool() bool {
 // ToolEntityInterface returns the Go import path for the Entity interface
 // defined in this tool. The value is used to identify all structs that implement
 // the Entity interface at runtime or via static analysis.
-// Example: "github.com/kcmvp/dvo/entity".
+// Example: "github.com/kcmvp/xql/entity".
 func ToolEntityInterface() string {
 	return ToolModulePath() + "/entity"
 }

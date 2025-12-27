@@ -33,8 +33,8 @@ package product
 
 import (
 	"fmt"
-	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/constraint"
+	"github.com/kcmvp/xql"
+	"github.com/kcmvp/xql/constraint"
 	"your-project/entity" // Import the package where the original Entity is defined
 )
 

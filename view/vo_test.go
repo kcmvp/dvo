@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kcmvp/dvo/validator"
+	"github.com/kcmvp/xql/validator"
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"

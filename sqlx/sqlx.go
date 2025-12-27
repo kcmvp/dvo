@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/kcmvp/dvo"
-	"github.com/kcmvp/dvo/entity"
-	"github.com/kcmvp/dvo/internal"
+	"github.com/kcmvp/xql"
+	"github.com/kcmvp/xql/entity"
+	"github.com/kcmvp/xql/internal"
 	"github.com/samber/mo"
 )
 

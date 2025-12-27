@@ -1,4 +1,4 @@
-module github.com/kcmvp/dvo
+module github.com/kcmvp/xql
 
 go 1.24.0
 

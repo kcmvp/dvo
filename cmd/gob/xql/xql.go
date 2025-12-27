@@ -7,7 +7,7 @@ import (
 
 	_ "embed"
 
-	"github.com/kcmvp/dvo/cmd/internal"
+	"github.com/kcmvp/xql/cmd/internal"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kcmvp/dvo/validator"
-	"github.com/kcmvp/dvo/view"
+	"github.com/kcmvp/xql/validator"
+	"github.com/kcmvp/xql/view"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

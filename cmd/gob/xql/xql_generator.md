@@ -12,7 +12,7 @@
    - File: `lower_{structName}.go`.
    - Contents: `entity.Field[{Struct}, {FieldType}]("{FieldName}")` declarations for every exported field that survives `xql:"-"`.
 3. **Idempotence**: re-generate the file completely each run; formatter (`gofmt`) ensures stable diffs.
-4. **Imports**: only import `github.com/kcmvp/dvo/entity` and any scalar types that need package references (e.g., `time`).
+4. **Imports**: only import `github.com/kcmvp/xql/entity` and any scalar types that need package references (e.g., `time`).
 
 Example snippet:
 ```go

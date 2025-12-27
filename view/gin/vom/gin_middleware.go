@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kcmvp/dvo/internal"
-	"github.com/kcmvp/dvo/view"
+	"github.com/kcmvp/xql/internal"
+	"github.com/kcmvp/xql/view"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 )

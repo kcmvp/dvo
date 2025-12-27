@@ -1,6 +1,6 @@
 package entity
 
-import "github.com/kcmvp/dvo/entity"
+import "github.com/kcmvp/xql/entity"
 
 type NegativeUnSupportTypeChannel struct {
 	ChannelField chan int

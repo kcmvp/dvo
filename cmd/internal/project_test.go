@@ -47,8 +47,8 @@ func TestToolModulePath(t *testing.T) {
 		}
 	} else {
 		// Fallback expectation when build info is unavailable.
-		if got != "github.com/kcmvp/dvo" {
-			t.Fatalf("ToolModulePath = %q, want %q (fallback)", got, "github.com/kcmvp/dvo")
+		if got != "github.com/kcmvp/xql" {
+			t.Fatalf("ToolModulePath = %q, want %q (fallback)", got, "github.com/kcmvp/xql")
 		}
 	}
 }

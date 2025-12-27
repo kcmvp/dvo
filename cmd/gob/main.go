@@ -5,10 +5,10 @@ import (
 	"os"
 	"slices"
 
-	"github.com/kcmvp/dvo/cmd/gob/dev"
-	"github.com/kcmvp/dvo/cmd/gob/sca"
-	"github.com/kcmvp/dvo/cmd/gob/xql"
-	"github.com/kcmvp/dvo/cmd/internal"
+	"github.com/kcmvp/xql/cmd/gob/dev"
+	"github.com/kcmvp/xql/cmd/gob/sca"
+	"github.com/kcmvp/xql/cmd/gob/xql"
+	"github.com/kcmvp/xql/cmd/internal"
 	"github.com/spf13/cobra"
 )
 

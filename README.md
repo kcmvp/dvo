@@ -2,14 +2,14 @@
   Declarative Value Object (DVO)
   <br/>
   <br/>
-  <a href="https://github.com/kcmvp/dvo/blob/main/LICENSE">
+  <a href="https://github.com/kcmvp/xql/blob/main/LICENSE">
     <img alt="GitHub" src="https://img.shields.io/github/license/kcmvp/dvo"/>
   </a>
-  <a href="https://goreportcard.com/report/github.com/kcmvp/dvo">
-    <img src="https://goreportcard.com/badge/github.com/kcmvp/dvo"/>
+  <a href="https://goreportcard.com/report/github.com/kcmvp/xql">
+    <img src="https://goreportcard.com/badge/github.com/kcmvp/xql"/>
   </a>
-  <a href="https://pkg.go.dev/github.com/kcmvp/dvo">
-    <img src="https://pkg.go.dev/badge/github.com/kcmvp/dvo.svg" alt="Go Reference"/>
+  <a href="https://pkg.go.dev/github.com/kcmvp/xql">
+    <img src="https://pkg.go.dev/badge/github.com/kcmvp/xql.svg" alt="Go Reference"/>
   </a>
   <a href="https://github.com/kcmvp/archunit/blob/main/.github/workflows/build.yml" rel="nofollow">
      <img src="https://img.shields.io/github/actions/workflow/status/kcmvp/dvo/build.yml?branch=main" alt="Build" />
@@ -87,7 +87,7 @@ stateDiagram-v2
 ## Installation
 
 ```bash
-go get github.com/kcmvp/dvo
+go get github.com/kcmvp/xql
 ```
 
 ## Core Concepts
@@ -99,8 +99,8 @@ A `ValueObject` is typically defined once at the package level and reused across
 ```go
 import (
     "time"
-    "github.com/kcmvp/dvo"
-    "github.com/kcmvp/dvo/constraint"
+    "github.com/kcmvp/xql"
+    "github.com/kcmvp/xql/constraint"
 )
 
 // 1. Define a schema for a single item within an order.
@@ -133,8 +133,8 @@ Here’s how you can apply multiple constraints to a single field:
 
 ```go
 import (
-    "github.com/kcmvp/dvo"
-    "github.com/kcmvp/dvo/constraint"
+    "github.com/kcmvp/xql"
+    "github.com/kcmvp/xql/constraint"
 )
 
 var profileVO = dvo.WithFields(
@@ -317,8 +317,8 @@ The resulting `userSchema` will validate a flat JSON structure like this:
 ```go
 import (
     "time"
-    "github.com/kcmvp/dvo"
-    "github.com/kcmvp/dvo/constraint"
+    "github.com/kcmvp/xql"
+    "github.com/kcmvp/xql/constraint"
 )
 
 // 1. Define a schema for a single item within an order.
@@ -348,7 +348,7 @@ var orderVO = dvo.WithFields(
 ```go
 import (
     "github.com/gin-gonic/gin"
-    "github.com/kcmvp/dvo/gin/vom" // Gin Validation Middleware
+    "github.com/kcmvp/xql/gin/vom" // Gin Validation Middleware
 )
 
 // 1. Define your handler to access the validated data.
@@ -374,7 +374,7 @@ func setupRouter() *gin.Engine {
 ```go
 import (
     "github.com/labstack/echo/v4"
-    "github.com/kcmvp/dvo/echo/vom" // Echo Validation Middleware
+    "github.com/kcmvp/xql/echo/vom" // Echo Validation Middleware
 )
 
 // 1. Define your handler.
@@ -399,7 +399,7 @@ func setupRouter() *echo.Echo {
 ```go
 import (
     "github.com/gofiber/fiber/v2"
-    "github.com/kcmvp/dvo/fiber/vom" // Fiber Validation Middleware
+    "github.com/kcmvp/xql/fiber/vom" // Fiber Validation Middleware
 )
 
 // 1. Define your handler.
@@ -427,7 +427,7 @@ This function is set **once** at application startup.
 ```go
 import (
     "github.com/gin-gonic/gin"
-    "github.com/kcmvp/dvo/gin/vom"
+    "github.com/kcmvp/xql/gin/vom"
 )
 
 // An enricher function for Gin.

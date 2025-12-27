@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/kcmvp/dvo/internal"
-	"github.com/kcmvp/dvo/view"
+	"github.com/kcmvp/xql/internal"
+	"github.com/kcmvp/xql/view"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/mo"

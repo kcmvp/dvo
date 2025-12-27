@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kcmvp/dvo/app"
+	"github.com/kcmvp/xql/app"
 	"github.com/spf13/viper"
 )
 

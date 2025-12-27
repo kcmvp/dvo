@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kcmvp/dvo/validator"
-	"github.com/kcmvp/dvo/view"
+	"github.com/kcmvp/xql/validator"
+	"github.com/kcmvp/xql/view"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
